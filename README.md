@@ -2,7 +2,7 @@
 
 A free, clutter-free university schedule organizer — courses, calendar, syllabus tracking, and office hours, all in a single page. No sign-up, no install, no server.
 
-**[Live app →](#)** *(replace this link with your GitHub Pages URL once it's live — see below)*
+**[Live app →](https://rva2111-cu.github.io/hudson-terminal/)**
 
 ## Features
 
