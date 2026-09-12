@@ -3103,6 +3103,13 @@ document.getElementById("eventForm").addEventListener("submit", (e) => {
   }
 
   mainEl.addEventListener("wheel", (e) => {
+    // This should only ever hijack scrolling for calendar-period navigation
+    // — #mainArea also hosts the Syllabus and Office Hours sections (both
+    // .sectionView, scrollable on their own), which have nothing to do with
+    // day/week/month navigation. Without this check, scrolling a long
+    // syllabus list got swallowed here instead of scrolling the list.
+    if (state.section !== "calendar") return;
+
     // Only trigger on the grid area, not when scrolling a time-grid or day list
     const target = e.target;
     // Allow natural scroll inside tgScroll (time grid) and dayEvList
