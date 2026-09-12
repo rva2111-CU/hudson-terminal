@@ -1,0 +1,3306 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Hudson Terminal</title>
+<style>
+  :root{
+    color-scheme: dark;
+    --bg: #16181C;
+    --surface: #212429;
+    --surface-2: #282C32;
+    --border: rgba(255,255,255,0.08);
+    --border-strong: rgba(255,255,255,0.16);
+    --ink: #F2F3F5;
+    --ink-soft: #9BA1AB;
+    --ink-faint: #6B7078;
+    /* Text that sits directly on --bg (not on a --surface card) — kept as a
+       separate variable from --ink because --bg is user-customizable while
+       --surface is not; the two can end up completely different brightness,
+       so they need independently-correct text colors. JS overrides these via
+       inline style once a custom background actually needs it; these are
+       just the matching static default for this theme's own background. */
+    --bg-ink: #F2F3F5;
+    --bg-ink-soft: #9BA1AB;
+    --bg-ink-faint: #6B7078;
+    --accent: #5B8DEF;
+    --accent-soft: rgba(91,141,239,0.16);
+    --shadow-sm: 0 1px 2px rgba(0,0,0,0.4);
+    --shadow-md: 0 8px 24px rgba(0,0,0,0.4);
+    --radius-lg: 16px;
+    --radius-md: 10px;
+    --radius-sm: 7px;
+  }
+
+  /* Light mode — dark stays the default; this only applies once the user
+     picks Light in Settings, via html[data-theme="light"]. */
+  html[data-theme="light"]{
+    color-scheme: light;
+    --bg: #FFFFFF;
+    --surface: #F5F5F7;
+    --surface-2: #EBEBEF;
+    --border: rgba(0,0,0,0.09);
+    --border-strong: rgba(0,0,0,0.18);
+    --ink: #14161A;
+    --ink-soft: #55595F;
+    --ink-faint: #8A8F97;
+    --bg-ink: #14161A;
+    --bg-ink-soft: #55595F;
+    --bg-ink-faint: #8A8F97;
+    --accent: #3D6FD9;
+    --accent-soft: rgba(61,111,217,0.12);
+    --shadow-sm: 0 1px 2px rgba(0,0,0,0.08);
+    --shadow-md: 0 8px 24px rgba(0,0,0,0.12);
+  }
+
+  * { box-sizing: border-box; }
+
+  html, body {
+    margin: 0;
+    padding: 0;
+    background: var(--bg);
+    color: var(--ink);
+    font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+  }
+
+  @media (prefers-reduced-motion: reduce) {
+    * { transition: none !important; animation: none !important; }
+  }
+
+  html, body {
+    margin: 0;
+    padding: 0;
+    height: 100%;
+    background: var(--bg);
+    color: var(--ink);
+    font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+  }
+
+  .app {
+    display: flex;
+    flex-direction: column;
+    height: 100vh;
+    overflow: hidden;
+  }
+
+  /* ---------- Topbar ---------- */
+  .topbar {
+    display: flex;
+    align-items: center;
+    gap: 16px;
+    padding: 0 0 0 0;
+    height: 64px;
+    flex-shrink: 0;
+    position: relative;
+    background: transparent;
+  }
+  /* The brand occupies the left 300px (same width as sidebar), unified background */
+  .topbarBrand {
+    width: 300px;
+    min-width: 300px;
+    flex-shrink: 0;
+    padding: 0 20px;
+    height: 100%;
+    display: flex;
+    align-items: center;
+    background: var(--surface);
+    border-right: 1px solid var(--border);
+  }
+  /* The right side of the topbar — nav controls, same background as main */
+  .topbarRight {
+    flex: 1;
+    display: flex;
+    align-items: center;
+    gap: 16px;
+    padding: 0 24px 0 20px;
+    height: 100%;
+    background: var(--bg);
+    border-bottom: 1px solid var(--border);
+  }
+  .brand {
+    line-height: 1.05;
+    background: #F5C518;
+    border-radius: 0;
+    padding: 8px 14px;
+    margin-top: 8px; /* leaves a strip of the surface color above the box */
+  }
+  .brandMain { font-size: 1.55rem; font-weight: 800; letter-spacing: -0.02em; color: #000; }
+  .brandSub { font-size: 0.78rem; font-weight: 700; color: rgba(0,0,0,0.68); margin-top: 2px; }
+  .segmented {
+    display: inline-flex;
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: 999px;
+    padding: 3px;
+    gap: 2px;
+  }
+  .segBtn {
+    border: none;
+    background: none;
+    color: var(--ink-soft);
+    font: inherit;
+    font-size: 0.85rem;
+    font-weight: 650;
+    padding: 8px 18px;
+    border-radius: 999px;
+    cursor: pointer;
+  }
+  .segBtn.active { background: var(--accent); color: #fff; }
+  /* Same look as .segBtn, distinct class so it never collides with the
+     Day/Week/Month view-switcher logic that queries .segBtn by itself. */
+  .themeSegBtn {
+    border: none;
+    background: none;
+    color: var(--ink-soft);
+    font: inherit;
+    font-size: 0.85rem;
+    font-weight: 650;
+    padding: 8px 18px;
+    border-radius: 999px;
+    cursor: pointer;
+  }
+  .themeSegBtn.active { background: var(--accent); color: #fff; }
+  .iconBtn {
+    width: 36px; height: 36px;
+    border-radius: 50%;
+    border: 1px solid var(--border);
+    background: var(--surface);
+    color: var(--ink-soft);
+    display: flex; align-items: center; justify-content: center;
+    cursor: pointer;
+    flex-shrink: 0;
+  }
+  .iconBtn:hover { color: var(--ink); border-color: var(--border-strong); }
+
+  :focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+
+  /* ---------- Body layout: sidebar | main ---------- */
+  .layout {
+    display: flex;
+    flex: 1;
+    min-height: 0;
+    overflow: hidden;
+  }
+
+  /* ---------- Sidebar ---------- */
+  .sidebar {
+    width: 300px;
+    min-width: 300px;
+    flex-shrink: 0;
+    border-right: 1px solid var(--border);
+    background: var(--surface);
+    overflow: hidden;           /* locked — no scrolling the sidebar itself */
+    padding: 16px 18px 20px;
+    display: flex;
+    flex-direction: column;
+    gap: 0;
+    height: 100%;
+    border-top-right-radius: 0;
+    border-bottom-right-radius: 0;
+    box-shadow: none;
+  }
+  @media (max-width: 900px) {
+    .sidebar { display: none; }
+  }
+
+  /* ---------- Main content ---------- */
+  .main {
+    flex: 1;
+    min-width: 0;
+    min-height: 0;
+    overflow: hidden;
+    padding: 16px 20px 16px;
+    background: var(--bg);
+    display: flex;
+    flex-direction: column;
+  }
+
+  /* Views fill the remaining space */
+  .view { display: none; flex-direction: column; flex: 1; min-height: 0; }
+  .view:not(.hidden) { display: flex; }
+  .view.hidden { display: none !important; }
+
+  #monthView { overflow: hidden; }
+
+  .card {
+    background: transparent;
+    border: none;
+    border-radius: 0;
+    padding: 0 0 12px;
+    margin-bottom: 0;
+    box-shadow: none;
+    border-bottom: 1px solid var(--border);
+    flex-shrink: 0;
+  }
+  .card:last-child { border-bottom: none; padding-bottom: 0; }
+  .card h3 {
+    font-size: 0.68rem;
+    font-weight: 700;
+    margin: 0 0 8px;
+    color: var(--ink-faint);
+    text-transform: uppercase;
+    letter-spacing: 0.07em;
+  }
+  .sidebar .card { padding: 12px 0; }
+
+  /* Notes card: takes up all available space between brand and Add Event section */
+  .notesCard {
+    display: flex;
+    flex-direction: column;
+    flex: 1;              /* grow to fill available vertical space */
+    min-height: 0;
+    overflow: hidden;
+  }
+  .notesCard .notesList {
+    overflow-y: auto;
+    flex: 1;
+    min-height: 0;
+    max-height: none;     /* let flex control the height, not a px cap */
+  }
+
+  /* The Add Event card never shrinks — it always shows in full */
+  .eventCard {
+    flex-shrink: 0;
+  }
+
+  .sidebar .stackForm { gap: 5px; }
+  .sidebar .stackForm label { margin-bottom: 2px; font-size: 0.67rem; }
+  .sidebar input[type="text"],
+  .sidebar input[type="date"],
+  .sidebar input[type="time"],
+  .sidebar select { padding: 6px 8px; font-size: 0.8rem; }
+  .sidebar .smallBtn { padding: 6px 12px; font-size: 0.8rem; }
+  .sidebar .smallBtn.primary {
+    padding: 10px 16px;
+    font-size: 0.9rem;
+    font-weight: 700;
+    width: 100%;
+    margin-top: 2px;
+  }
+  .inlineForm { display: flex; gap: 6px; margin-bottom: 8px; }
+  .inlineForm input { flex: 1; min-width: 0; }
+  .stackForm { display: flex; flex-direction: column; gap: 7px; }
+  .stackForm label { display: block; font-size: 0.7rem; color: var(--ink-faint); margin-bottom: 3px; font-weight: 600; }
+
+  input[type="text"], input[type="date"], select {
+    width: 100%;
+    background: var(--surface-2);
+    border: 1px solid var(--border);
+    color: var(--ink);
+    border-radius: var(--radius-sm);
+    padding: 7px 9px;
+    font-size: 0.82rem;
+    font-family: inherit;
+  }
+  input[type="text"]:focus, input[type="date"]:focus, select:focus {
+    border-color: var(--accent);
+    box-shadow: 0 0 0 3px var(--accent-soft);
+    outline: none;
+  }
+
+  .smallBtn {
+    font: inherit;
+    border: 1px solid var(--border);
+    background: var(--surface-2);
+    color: var(--ink);
+    border-radius: var(--radius-sm);
+    padding: 7px 12px;
+    font-size: 0.8rem;
+    font-weight: 650;
+    cursor: pointer;
+    white-space: nowrap;
+  }
+  .smallBtn:hover { border-color: var(--border-strong); }
+  .smallBtn.primary { background: var(--accent); color: #fff; border-color: var(--accent); }
+  .smallBtn.primary:hover { filter: brightness(1.08); }
+  .ghostBtn {
+    font: inherit;
+    background: none;
+    border: 1px solid var(--border);
+    color: var(--ink-soft);
+    border-radius: 999px;
+    padding: 7px 15px;
+    font-size: 0.8rem;
+    cursor: pointer;
+  }
+  .ghostBtn:hover { color: var(--ink); border-color: var(--border-strong); }
+
+  .notesList {
+    list-style: none;
+    margin: 0;
+    padding: 4px 2px 4px;
+    display: flex;
+    flex-wrap: wrap;
+    gap: 10px;
+    overflow-y: auto;
+    align-content: flex-start;
+  }
+  /* Sticky note colours — cycle through a few warm tones */
+  .noteRow {
+    position: relative;
+    width: calc(50% - 5px);
+    min-height: 72px;
+    background: #F9E04B;
+    color: #2A2410;
+    border-radius: 3px 3px 3px 3px;
+    padding: 10px 10px 18px 10px;
+    box-shadow: 2px 3px 8px rgba(0,0,0,0.35), 0 1px 2px rgba(0,0,0,0.2);
+    font-family: "Segoe UI", -apple-system, sans-serif;
+    font-size: 0.78rem;
+    line-height: 1.45;
+    word-break: break-word;
+    /* Slight random-ish tilt via nth-child so each note feels unique */
+    transform-origin: center;
+  }
+  .noteRow:nth-child(odd)  { transform: rotate(-1.2deg); background: #F9E04B; }
+  .noteRow:nth-child(even) { transform: rotate(0.9deg);  background: #FFC85C; }
+  .noteRow:nth-child(3n)   { transform: rotate(-0.5deg); background: #B5E5A0; }
+  .noteRow:nth-child(4n)   { transform: rotate(1.4deg);  background: #A8D8F0; }
+  .noteRow:hover { transform: rotate(0deg) scale(1.03); z-index: 2; box-shadow: 4px 6px 16px rgba(0,0,0,0.45); transition: transform .15s ease, box-shadow .15s ease; }
+  /* Folded corner */
+  .noteRow::after {
+    content: "";
+    position: absolute;
+    bottom: 0; right: 0;
+    width: 18px; height: 18px;
+    background: linear-gradient(225deg, rgba(0,0,0,0.15) 50%, transparent 50%);
+    border-top-left-radius: 3px;
+  }
+  .noteRow .noteText { display: block; color: inherit; }
+  .noteRow .delBtn {
+    position: absolute;
+    top: 4px; right: 5px;
+    background: none; border: none;
+    color: rgba(0,0,0,0.3);
+    font-size: 0.95rem;
+    line-height: 1;
+    padding: 0;
+    cursor: pointer;
+    opacity: 0;
+    transition: opacity .12s;
+  }
+  .noteRow:hover .delBtn { opacity: 1; }
+  .noteRow .delBtn:hover { color: rgba(0,0,0,0.7); }
+  .emptyHint { color: var(--ink-faint); font-size: 0.82rem; padding: 4px 2px; }
+
+  .delBtn { background: none; border: none; color: var(--ink-faint); cursor: pointer; font-size: 1.05rem; line-height: 1; padding: 0 2px; flex-shrink: 0; }
+  .delBtn:hover { color: var(--ink); }
+
+  /* ---------- View nav ---------- */
+  /* view hidden handled above */
+  .viewNav { display: flex; align-items: center; gap: 12px; margin-bottom: 10px; flex-shrink: 0; }
+  .viewNav h2 { flex: 1; text-align: center; font-size: 1.22rem; font-weight: 700; margin: 0; color: var(--bg-ink); }
+  .navGroup { display: flex; align-items: center; gap: 8px; }
+  .navBtn {
+    width: 32px; height: 32px;
+    border-radius: 50%;
+    border: 1px solid var(--border);
+    background: var(--surface);
+    color: var(--ink);
+    display: flex; align-items: center; justify-content: center;
+    cursor: pointer;
+  }
+  .navBtn:hover { border-color: var(--border-strong); }
+  .navBtn:disabled { opacity: 0.3; cursor: default; }
+  .todayBtn {
+    font: inherit;
+    background: var(--surface);
+    border: 1px solid var(--border);
+    color: var(--ink-soft);
+    border-radius: 999px;
+    padding: 6px 14px;
+    font-size: 0.8rem;
+    font-weight: 650;
+    cursor: pointer;
+  }
+  .todayBtn:hover { color: var(--ink); border-color: var(--border-strong); }
+
+  /* ---------- Shared grid (Week + Month use identical cells) ---------- */
+  .gridWrap { display: flex; flex-direction: column; flex: 1; min-height: 0; }
+  .weekdayRow { display: grid; grid-template-columns: repeat(7, minmax(84px, 1fr)); margin-bottom: 6px; flex-shrink: 0; }
+  .weekdayRow span { text-align: center; font-size: 0.76rem; color: var(--bg-ink-faint); font-weight: 600; }
+
+  /* Month grid fills all remaining height — rows auto-size to fill */
+  .cellGrid {
+    display: grid;
+    grid-template-columns: repeat(7, minmax(84px, 1fr));
+    gap: 8px;
+    flex: 1;
+    min-height: 0;
+  }
+  .cell {
+    /* No aspect-ratio — height is controlled by the grid row */
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: var(--radius-md);
+    padding: 8px;
+    display: flex;
+    flex-direction: column;
+    cursor: pointer;
+    transition: transform .12s ease, box-shadow .12s ease;
+    min-height: 0;
+    overflow: hidden;
+  }
+  .cell:hover { transform: translateY(-2px); box-shadow: var(--shadow-md); }
+  .cell.hasEvents { border-color: transparent; }
+  .cell.otherMonth { opacity: 0.4; }
+  .cell.cellEmpty {
+    background: transparent !important;
+    border-color: transparent !important;
+    pointer-events: none;
+    box-shadow: none !important;
+  }
+  .cell.isToday { box-shadow: 0 0 0 2px var(--accent) inset; }
+  .cell:hover.isToday { box-shadow: 0 0 0 2px var(--accent) inset, var(--shadow-md); }
+  .cell .dnum { font-size: 0.92rem; font-weight: 700; font-variant-numeric: tabular-nums; margin-bottom: 6px; flex-shrink: 0; }
+  .cell .cellEvents { display: flex; flex-direction: column; gap: 3px; overflow: hidden; flex: 1; min-height: 0; }
+  .cell .evLine { font-size: 0.68rem; font-weight: 700; line-height: 1.25; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+  .cell .more { font-size: 0.65rem; font-weight: 600; opacity: 0.85; }
+
+  /* ---------- Today pill ---------- */
+  .todayPill {
+    background: var(--accent-soft);
+    color: var(--accent);
+    font-size: 0.7rem;
+    font-weight: 700;
+    padding: 3px 11px;
+    border-radius: 999px;
+    margin-left: 10px;
+    vertical-align: middle;
+  }
+  .emptyState { color: var(--ink-faint); font-size: 0.92rem; text-align: center; padding: 40px 10px 10px; }
+
+  /* ---------- Time grid (Day + Week views) ---------- */
+  .tgOuter {
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: var(--radius-lg);
+    overflow: hidden;
+    box-shadow: var(--shadow-sm);
+    display: flex;
+    flex-direction: column;
+    height: calc(100vh - 64px - 76px); /* viewport minus topbar minus viewNav */
+  }
+
+  /* --- Day header row (week view only) --- */
+  /* Lives inside .tgScroll itself (sticky), not as a separate sibling
+     element — that way its columns are computed against the exact same
+     scrollbar-adjusted width as the grid below, instead of two independently
+     flexed elements that can round to slightly different pixel widths. */
+  .tgDayHeader {
+    display: flex;
+    flex-shrink: 0;
+    border-bottom: 1px solid var(--border);
+    background: var(--surface);
+    position: sticky;
+    top: 0;
+    z-index: 3;
+  }
+  .tgDayHeaderGutter {
+    width: 52px;
+    min-width: 52px;
+    border-right: 1px solid var(--border);
+  }
+  .tgDayHeaderCols {
+    flex: 1;
+    display: flex;
+  }
+  .tgDayCol {
+    flex: 1;
+    text-align: center;
+    padding: 10px 4px 8px;
+    border-right: 1px solid var(--border);
+    font-size: 0.78rem;
+    font-weight: 700;
+    color: var(--ink-soft);
+    cursor: pointer;
+  }
+  .tgDayCol:last-child { border-right: none; }
+  .tgDayCol.isToday { color: var(--accent); }
+  .tgDayCol .tgDayNum {
+    display: inline-flex; align-items: center; justify-content: center;
+    width: 28px; height: 28px; border-radius: 50%;
+    font-size: 1rem; font-weight: 800; margin-top: 2px;
+  }
+  .tgDayCol.isToday .tgDayNum { background: var(--accent); color: #fff; }
+
+  /* --- All-day strip --- */
+  .tgAllDay {
+    display: flex;
+    flex-shrink: 0;
+    border-bottom: 1px solid var(--border);
+    background: var(--surface);
+    min-height: 36px;
+    overflow-y: scroll; /* reserve the same scrollbar width as the day-header
+                            and the scrollable body below, so all three rows'
+                            columns line up instead of the all-day row being
+                            slightly wider */
+    scrollbar-color: transparent transparent;
+  }
+  .tgAllDay::-webkit-scrollbar { width: 8px; background: transparent; }
+  .tgAllDay::-webkit-scrollbar-thumb { background: transparent; }
+  .tgAllDayGutter {
+    width: 52px;
+    min-width: 52px;
+    flex-shrink: 0;
+    border-right: 1px solid var(--border);
+    font-size: 0.62rem;
+    color: var(--ink-faint);
+    font-weight: 700;
+    display: flex;
+    align-items: center;
+    justify-content: flex-end;
+    padding-right: 8px;
+    user-select: none;
+  }
+  .tgAllDaySlots {
+    flex: 1;
+    display: flex;
+    padding: 4px 0;
+  }
+  .tgAllDayCell {
+    flex: 1;
+    padding: 1px 3px;
+    border-right: 1px solid var(--border);
+    display: flex;
+    flex-direction: column;
+    gap: 2px;
+    overflow: hidden;
+  }
+  .tgAllDayCell:last-child { border-right: none; }
+
+  /* --- Scrollable time body --- */
+  .tgScroll {
+    flex: 1;
+    overflow-y: scroll;   /* always-on scrollbar keeps header/body column widths in sync */
+    min-height: 0;
+    scrollbar-width: thin;
+    scrollbar-color: var(--border-strong) transparent;
+  }
+  .tgScroll::-webkit-scrollbar { width: 8px; }
+  .tgScroll::-webkit-scrollbar-track { background: transparent; }
+  .tgScroll::-webkit-scrollbar-thumb { background: var(--border-strong); border-radius: 4px; }
+  .tgBody {
+    display: flex;
+    min-height: 1536px; /* 64px * 24 */
+  }
+
+  /* Hour labels gutter */
+  .tgLabels {
+    width: 52px;
+    min-width: 52px;
+    flex-shrink: 0;
+    border-right: 1px solid var(--border);
+    background: var(--surface);
+    position: sticky;
+    left: 0;
+    z-index: 1;
+  }
+  .tgHourLabel {
+    height: 64px;
+    display: flex;
+    align-items: flex-start;
+    justify-content: flex-end;
+    padding: 0 8px 0 0;
+    font-size: 0.68rem;
+    font-weight: 600;
+    color: var(--ink-faint);
+    transform: translateY(-0.5em);
+    user-select: none;
+    pointer-events: none;
+  }
+  .tgHourLabel.midnight { color: transparent; }
+
+  /* Column zone */
+  .tgColZone {
+    flex: 1;
+    position: relative;
+    display: flex;
+  }
+
+  /* Hour lines — span the full column zone */
+  .tgLines {
+    position: absolute;
+    inset: 0;
+    pointer-events: none;
+    z-index: 0;
+  }
+  .tgLine {
+    position: absolute; left: 0; right: 0;
+    border-top: 1px solid var(--border);
+  }
+  .tgLine.half { border-top-style: dashed; opacity: 0.35; }
+
+  /* Current-time line */
+  .tgNow {
+    position: absolute; left: 0; right: 0;
+    height: 2px; background: var(--accent);
+    z-index: 4; pointer-events: none;
+  }
+  .tgNow::before {
+    content: "";
+    position: absolute; left: -4px; top: -4px;
+    width: 10px; height: 10px; border-radius: 50%;
+    background: var(--accent);
+  }
+
+  /* Individual day columns */
+  .tgDaySlot {
+    flex: 1;
+    position: relative;
+    border-right: 1px solid var(--border);
+    min-height: 1536px;
+    z-index: 1;
+  }
+  .tgDaySlot:last-child { border-right: none; }
+  .tgDaySlot:hover { background: var(--border); }
+
+  input[type="time"] {
+    background: var(--surface-2);
+    border: 1px solid var(--border);
+    color: var(--ink);
+    border-radius: var(--radius-sm);
+    padding: 7px 9px;
+    font-size: 0.82rem;
+    font-family: inherit;
+    width: 100%;
+  }
+  input[type="time"]:focus {
+    border-color: var(--accent);
+    box-shadow: 0 0 0 3px var(--accent-soft);
+    outline: none;
+  }
+  /* Timed event block rendered inside the time-grid column */
+  .tgEvent {
+    position: absolute;
+    left: 3px; right: 3px;
+    border-radius: 6px;
+    padding: 4px 7px;
+    font-size: 0.72rem;
+    font-weight: 700;
+    line-height: 1.3;
+    overflow: hidden;
+    cursor: pointer;
+    box-shadow: 0 1px 4px rgba(0,0,0,0.35);
+    z-index: 2;
+    min-height: 20px;
+  }
+  .tgEvent:hover { filter: brightness(1.1); }
+  /* All-day chip (used inside .tgAllDayCell) */
+  .tgChip {
+    font-size: 0.69rem;
+    font-weight: 700;
+    padding: 2px 6px;
+    border-radius: 4px;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    cursor: pointer;
+  }
+  .tgChip:hover { filter: brightness(1.1); }
+
+  /* Below-grid event list + quick add (day view) */
+  .dayEvList {
+    padding: 16px 20px 6px;
+    border-top: 1px solid var(--border);
+  }
+  /* Per-day group headings in the week view's below-grid event list */
+  .weekListHeading {
+    font-size: 0.72rem; font-weight: 700; color: var(--ink-faint);
+    text-transform: uppercase; letter-spacing: 0.05em;
+    margin: 14px 0 8px;
+  }
+  .weekListHeading:first-child { margin-top: 0; }
+  .weekListHeading.isToday { color: var(--accent); }
+
+  /* ---------- Rows (used in allday list section) ---------- */
+  .row {
+    display: flex;
+    align-items: flex-start;
+    gap: 12px;
+    background: var(--surface-2);
+    border-left: 6px solid var(--sw);
+    border-radius: var(--radius-md);
+    padding: 13px 15px;
+    margin-bottom: 10px;
+  }
+  .row .cb { margin-top: 3px; width: 15px; height: 15px; accent-color: var(--sw); flex-shrink: 0; cursor: pointer; }
+  .row .body { flex: 1; min-width: 0; }
+  .row .titleLine { display: flex; align-items: baseline; gap: 9px; flex-wrap: wrap; }
+  .row .title { font-size: 0.96rem; font-weight: 650; }
+  .row .course { font-size: 0.74rem; color: var(--ink-faint); }
+  .row .badge { font-size: 0.68rem; font-weight: 700; padding: 2px 8px; border-radius: 999px; background: var(--sw); color: #fff; }
+  .row .badge.exam { background: var(--sw); }
+  .row .detail { font-size: 0.84rem; color: var(--ink-soft); margin-top: 3px; line-height: 1.45; }
+  .row.done { opacity: 0.55; }
+  .row.done .title, .row.done .detail { text-decoration: line-through; }
+  .row .delBtn { margin-left: auto; align-self: flex-start; }
+
+  /* ---------- Draw overlay ---------- */
+  #mainArea { position: relative; }
+
+
+  /* ---------- Toggle switch ---------- */
+  .toggleSwitch { position:relative; width:36px; height:20px; display:inline-block; flex-shrink:0; }
+  .toggleSwitch input { opacity:0; width:0; height:0; }
+  .toggleSlider {
+    position:absolute; inset:0; background:var(--surface-2); border-radius:999px;
+    border:1px solid var(--border); cursor:pointer; transition:background .2s;
+  }
+  .toggleSlider::before {
+    content:""; position:absolute; left:3px; top:2px; width:14px; height:14px;
+    border-radius:50%; background:var(--ink-faint); transition:transform .2s, background .2s;
+  }
+  .toggleSwitch input:checked + .toggleSlider { background:var(--accent); border-color:var(--accent); }
+  .toggleSwitch input:checked + .toggleSlider::before { transform:translateX(16px); background:#fff; }
+
+  /* ---------- Section views: header + course grid ---------- */
+  .sectionView {
+    flex: 1;
+    min-height: 0;
+    overflow-y: auto;
+    padding: 24px 28px;
+    display: flex;
+    flex-direction: column;
+    gap: 20px;
+  }
+  .sectionView.hidden { display: none !important; }
+  .sectionHeader {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    padding-bottom: 16px;
+    border-bottom: 1px solid var(--border);
+    flex-shrink: 0;
+  }
+  .sectionHeader h2 { margin: 0; font-size: 1.4rem; font-weight: 700; color: var(--bg-ink); }
+  .sectionBackBtn {
+    background: none; border: 1px solid var(--border); color: var(--ink-soft);
+    border-radius: var(--radius-sm); padding: 6px 12px; font: inherit;
+    font-size: 0.82rem; cursor: pointer; display: none; align-items: center; gap: 6px;
+  }
+  .sectionBackBtn.visible { display: flex; }
+  .sectionBackBtn:hover { color: var(--ink); border-color: var(--border-strong); }
+
+  /* Course grid */
+  .courseGrid {
+    display: grid;
+    grid-template-columns: repeat(auto-fill, minmax(180px, 1fr));
+    gap: 14px;
+  }
+  .courseCard {
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: var(--radius-lg);
+    padding: 20px 16px;
+    cursor: pointer;
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+    transition: transform .12s, box-shadow .12s;
+    position: relative;
+    overflow: hidden;
+  }
+  .courseCard::before {
+    content: "";
+    position: absolute;
+    top: 0; left: 0; right: 0;
+    height: 4px;
+    background: var(--sw, var(--accent));
+  }
+  .courseCard:hover { transform: translateY(-2px); box-shadow: var(--shadow-md); }
+  .courseCard .ccName { font-size: 0.95rem; font-weight: 700; }
+  .courseCard .ccSub  { font-size: 0.78rem; color: var(--ink-faint); }
+  .emptyCourseHint {
+    color: var(--bg-ink-faint); font-size: 0.9rem;
+    text-align: center; padding: 48px 0;
+    grid-column: 1/-1;
+  }
+
+  /* Syllabus topic list */
+  .topicList { display: flex; flex-direction: column; gap: 8px; }
+  .topicItem {
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: var(--radius-md);
+    padding: 12px 16px;
+    display: flex; align-items: center; gap: 12px;
+  }
+  .topicItem .topicCheck {
+    width: 16px; height: 16px; flex-shrink: 0; accent-color: var(--sw); cursor: pointer;
+  }
+  .topicItem .topicText { flex: 1; font-size: 0.88rem; }
+  .topicItem.done { opacity: 0.55; }
+  .topicItem.done .topicText { text-decoration: line-through; }
+  .addTopicRow {
+    display: flex; gap: 8px; margin-top: 4px;
+  }
+  .addTopicRow input { flex: 1; }
+
+  /* Office hours weekly grid — a read-only visual (blocks are added/removed
+     via the form below, not by clicking the grid), so precise start/end
+     times (not just whole-hour slots) can be represented. */
+  .ohWeek {
+    display: flex;
+    flex-direction: column;
+    border: 1px solid var(--border);
+    border-radius: var(--radius-md);
+    overflow: hidden;
+    background: var(--surface);
+  }
+  .ohHeaderRow { display: flex; border-bottom: 1px solid var(--border); }
+  .ohHeaderGutter { width: 56px; min-width: 56px; flex-shrink: 0; background: var(--surface-2); }
+  .ohDayHdr {
+    flex: 1;
+    background: var(--surface-2);
+    text-align: center;
+    padding: 10px 4px;
+    font-size: 0.76rem; font-weight: 700; color: var(--ink-soft);
+    border-left: 1px solid var(--border);
+  }
+  .ohBody { display: flex; position: relative; height: 420px; }
+  .ohBodyGutter { width: 56px; min-width: 56px; flex-shrink: 0; border-right: 1px solid var(--border); position: relative; }
+  .ohHourLabel {
+    position: absolute; right: 8px; transform: translateY(-50%);
+    font-size: 0.68rem; color: var(--ink-faint); white-space: nowrap;
+  }
+  .ohDayCol { flex: 1; position: relative; border-left: 1px solid var(--border); }
+  .ohHourLine { position: absolute; left: 0; right: 0; border-top: 1px solid var(--border); }
+  .ohBlock {
+    position: absolute; left: 3px; right: 3px;
+    border-radius: 5px;
+    padding: 3px 6px;
+    font-size: 0.68rem; font-weight: 700; line-height: 1.3;
+    overflow: hidden;
+    min-height: 18px;
+  }
+  .ohBlock .ohBlockDel {
+    position: absolute; top: 1px; right: 3px;
+    background: none; border: none; color: inherit; opacity: 0.75;
+    cursor: pointer; font-size: 0.9rem; line-height: 1; padding: 0 2px;
+  }
+  .ohBlock .ohBlockDel:hover { opacity: 1; }
+  .ohAddForm {
+    display: flex; gap: 10px; flex-wrap: wrap; align-items: flex-end; margin-bottom: 16px;
+  }
+  .ohAddForm .ohField { display: flex; flex-direction: column; gap: 4px; }
+  .ohAddForm .ohField label { font-size: 0.68rem; color: var(--ink-faint); font-weight: 600; }
+  .ohAddForm select {
+    background: var(--surface-2); border: 1px solid var(--border); color: var(--ink);
+    border-radius: var(--radius-sm); padding: 7px 9px; font: inherit; font-size: 0.82rem;
+  }
+  .sectionTabs {
+    display: flex;
+    gap: 2px;
+    align-items: center;
+  }
+  .sectionTab {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    font: inherit;
+    font-size: 0.84rem;
+    font-weight: 650;
+    padding: 8px 14px;
+    border: none;
+    background: none;
+    color: var(--bg-ink-faint);
+    border-radius: var(--radius-sm);
+    cursor: pointer;
+    white-space: nowrap;
+  }
+  .sectionTab:hover { background: var(--border); color: var(--bg-ink); }
+  .sectionTab.active { background: var(--accent-soft); color: var(--accent); }
+
+  /* ---------- Create course button ---------- */
+  .createCourseBtn {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    font: inherit;
+    font-size: 0.82rem;
+    font-weight: 700;
+    padding: 7px 14px;
+    background: var(--surface-2);
+    border: 1px solid var(--border-strong);
+    color: var(--ink);
+    border-radius: var(--radius-sm);
+    cursor: pointer;
+    white-space: nowrap;
+    flex-shrink: 0;
+  }
+  .createCourseBtn:hover { border-color: var(--accent); color: var(--accent); }
+
+  /* ---------- Toggle switch ---------- */
+  /* ---------- Quick swatches ---------- */
+  .quickSwatch {
+    width: 26px; height: 26px;
+    border-radius: 50%;
+    cursor: pointer;
+    border: 2px solid transparent;
+    flex-shrink: 0;
+    transition: transform .1s, border-color .1s;
+  }
+  .quickSwatch:hover { transform: scale(1.18); }
+  .quickSwatch.selected { border-color: var(--ink); transform: scale(1.18); }
+
+  /* Hide viewToggle when not in calendar section */
+  .viewToggle-hidden { display: none !important; }
+  .slideOld, .slideNew {
+    /* Sized and positioned by JS inline styles during animation.
+       At rest they don't exist (section content is flat). */
+    display: flex;
+    flex-direction: column;
+    min-height: 0;
+    /* GPU-composited: no repaint during translate */
+    will-change: transform;
+  }
+
+  /* ---------- Toast notification ---------- */
+  #mainArea { position: relative; }
+  .toast {
+    position: absolute;
+    bottom: 28px;
+    left: 50%;
+    transform: translateX(-50%) translateY(0);
+    background: var(--ink);
+    color: var(--bg);
+    font-size: 0.88rem;
+    font-weight: 650;
+    padding: 11px 22px;
+    border-radius: 999px;
+    box-shadow: 0 4px 18px rgba(0,0,0,0.4);
+    z-index: 200;
+    white-space: nowrap;
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    opacity: 1;
+    transition: opacity 0.3s ease, transform 0.3s ease;
+    pointer-events: none;
+  }
+  .toast.hiding {
+    opacity: 0;
+    transform: translateX(-50%) translateY(8px);
+  }
+  .toastDot {
+    width: 8px; height: 8px;
+    border-radius: 50%;
+    background: var(--accent);
+    flex-shrink: 0;
+  }
+
+  /* ---------- Quick-add (day view inline) ---------- */
+  .quickAddWrap {
+    margin-top: 16px;
+  }
+  .quickAddToggle {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: 8px;
+    background: var(--accent);
+    color: #fff;
+    font: inherit;
+    font-size: 0.9rem;
+    font-weight: 700;
+    width: 100%;
+    padding: 13px 16px;
+    border: none;
+    border-radius: var(--radius-md);
+    cursor: pointer;
+    transition: filter .12s;
+    box-shadow: 0 2px 8px rgba(91,141,239,0.22);
+  }
+  .quickAddToggle:hover { filter: brightness(1.1); }
+  .quickAddToggle .plus { font-size: 1.15rem; line-height: 1; }
+  .quickAddForm {
+    display: none;
+    flex-direction: column;
+    gap: 10px;
+    margin-top: 12px;
+  }
+  .quickAddForm.open { display: flex; }
+  .quickAddRow { display: flex; gap: 8px; }
+  .quickAddRow input, .quickAddRow select { flex: 1; min-width: 0; }
+  .quickAddActions { display: flex; gap: 8px; justify-content: flex-end; }
+
+  /* ---------- Settings modal ---------- */
+  .scrim { position: fixed; inset: 0; background: rgba(0,0,0,0.55); z-index: 40; }
+  .scrim.hidden { display: none; }
+  .modal { position: fixed; inset: 0; z-index: 41; display: flex; align-items: center; justify-content: center; padding: 20px; }
+  .modal.hidden { display: none; }
+  .modalCard {
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: var(--radius-lg);
+    box-shadow: var(--shadow-md);
+    width: 440px; max-width: 100%; max-height: 85vh; overflow-y: auto;
+    padding: 22px;
+  }
+  .modalHeader { display: flex; align-items: center; justify-content: space-between; margin-bottom: 18px; }
+  .modalHeader h3 { margin: 0; font-size: 1.1rem; font-weight: 700; }
+  .closeBtn { background: none; border: none; font-size: 1.3rem; line-height: 1; color: var(--ink-soft); cursor: pointer; padding: 2px 6px; }
+  .closeBtn:hover { color: var(--ink); }
+  .modalSection { margin-bottom: 20px; }
+  .modalSection:last-child { margin-bottom: 0; }
+  .modalSection h4 { font-size: 0.78rem; color: var(--ink-faint); margin: 0 0 10px; font-weight: 650; }
+  .colorRow { display: flex; align-items: center; gap: 12px; padding: 9px 0; border-bottom: 1px solid var(--border); }
+  .colorRow:last-of-type { border-bottom: none; }
+  .colorRow .name { flex: 1; font-size: 0.9rem; font-weight: 600; }
+  .colorRow input[type="color"] {
+    width: 42px; height: 32px; border: 1px solid var(--border); border-radius: 8px; background: none; padding: 2px; cursor: pointer;
+  }
+  .courseListRow { display: flex; align-items: center; gap: 10px; padding: 8px 0; border-bottom: 1px solid var(--border); }
+  .courseListRow:last-of-type { border-bottom: none; }
+  .courseListRow .swatchDot { width: 14px; height: 14px; border-radius: 50%; flex-shrink: 0; }
+  .courseListRow .name { flex: 1; font-size: 0.88rem; font-weight: 600; }
+  .emptyCourseListHint { color: var(--ink-faint); font-size: 0.82rem; padding: 4px 0; }
+</style>
+</head>
+<body>
+<div class="app">
+  <div class="topbar">
+    <div class="topbarBrand">
+      <div class="brand">
+        <div class="brandMain">hudson terminal</div>
+        <div class="brandSub">university schedule organizer</div>
+      </div>
+    </div>
+    <div class="topbarRight">
+      <!-- Section nav tabs -->
+      <div class="sectionTabs" id="sectionTabs">
+        <button class="sectionTab active" data-section="calendar">
+          <svg viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="4" width="18" height="18" rx="2"/><line x1="16" y1="2" x2="16" y2="6"/><line x1="8" y1="2" x2="8" y2="6"/><line x1="3" y1="10" x2="21" y2="10"/></svg>
+          Calendar
+        </button>
+        <button class="sectionTab" data-section="syllabus">
+          <svg viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/><line x1="16" y1="13" x2="8" y2="13"/><line x1="16" y1="17" x2="8" y2="17"/><polyline points="10 9 9 9 8 9"/></svg>
+          Syllabus
+        </button>
+        <button class="sectionTab" data-section="office">
+          <svg viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 10c0 7-9 13-9 13s-9-6-9-13a9 9 0 0 1 18 0z"/><circle cx="12" cy="10" r="3"/></svg>
+          Office Hours
+        </button>
+      </div>
+
+      <!-- Calendar view toggle — expands when Calendar tab is active -->
+      <div class="segmented" id="viewToggle">
+        <button class="segBtn" data-view="day">Day</button>
+        <button class="segBtn" data-view="week">Week</button>
+        <button class="segBtn active" data-view="month">Month</button>
+      </div>
+
+      <div style="flex:1"></div>
+
+      <!-- Manage courses button -->
+      <button class="createCourseBtn" id="manageCoursesBtn">
+        <svg viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="8" y1="6" x2="21" y2="6"/><line x1="8" y1="12" x2="21" y2="12"/><line x1="8" y1="18" x2="21" y2="18"/><line x1="3" y1="6" x2="3.01" y2="6"/><line x1="3" y1="12" x2="3.01" y2="12"/><line x1="3" y1="18" x2="3.01" y2="18"/></svg>
+        Manage Courses
+      </button>
+
+      <button class="iconBtn" id="settingsBtn" aria-label="Settings">
+        <svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><line x1="4" y1="6" x2="20" y2="6"/><circle cx="9" cy="6" r="2.2" fill="var(--bg)"/><line x1="4" y1="12" x2="20" y2="12"/><circle cx="15" cy="12" r="2.2" fill="var(--bg)"/><line x1="4" y1="18" x2="20" y2="18"/><circle cx="7" cy="18" r="2.2" fill="var(--bg)"/></svg>
+      </button>
+    </div>
+  </div>
+
+  <div class="layout">
+    <aside class="sidebar">
+      <section class="card notesCard">
+        <form class="inlineForm" id="noteForm">
+          <input type="text" id="noteInput" placeholder="Add a note…" autocomplete="off">
+          <button type="submit" class="smallBtn">Add</button>
+        </form>
+        <ul class="notesList" id="notesList"></ul>
+      </section>
+
+      <section class="card eventCard">
+        <form class="stackForm" id="eventForm">
+          <div>
+            <label for="evDate">Date</label>
+            <input type="date" id="evDate" required>
+          </div>
+          <div>
+            <label for="evTitle">Title</label>
+            <input type="text" id="evTitle" placeholder="e.g. Study session" required>
+          </div>
+          <div>
+            <label for="evCourse">Course</label>
+            <select id="evCourse">
+              <option value="none">— None —</option>
+            </select>
+          </div>
+          <div>
+            <label>Time (optional)</label>
+            <div style="display:flex;gap:8px;align-items:center;">
+              <input type="time" id="evStart" style="flex:1;">
+              <span style="color:var(--ink-faint);font-size:0.8rem;flex-shrink:0;">to</span>
+              <input type="time" id="evEnd" style="flex:1;">
+            </div>
+          </div>
+          <!-- Recurring toggle -->
+          <div>
+            <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:6px;">
+              <label style="margin:0;">Recurring</label>
+              <label class="toggleSwitch">
+                <input type="checkbox" id="evRecurring">
+                <span class="toggleSlider"></span>
+              </label>
+            </div>
+            <div id="recurringOptions" class="hidden" style="display:none;">
+              <div style="display:flex;gap:8px;margin-bottom:6px;">
+                <select id="evRecurFreq" style="flex:1;">
+                  <option value="weekly">Every week</option>
+                  <option value="daily">Every day</option>
+                  <option value="monthly">Every month</option>
+                </select>
+              </div>
+              <div style="display:flex;gap:6px;align-items:center;">
+                <label style="font-size:0.7rem;color:var(--ink-faint);margin:0;white-space:nowrap;">Until</label>
+                <input type="date" id="evRecurEnd" style="flex:1;">
+              </div>
+            </div>
+          </div>
+          <div>
+            <label for="evDetail">Notes (optional)</label>
+            <input type="text" id="evDetail" placeholder="Optional detail">
+          </div>
+          <button type="submit" class="smallBtn primary">Add event</button>
+        </form>
+      </section>
+    </aside>
+
+    <main class="main" id="mainArea">
+
+      <!-- Syllabus section -->
+      <section id="syllabusView" class="sectionView hidden">
+        <div class="sectionHeader">
+          <h2 id="syllabusTitle">Syllabus</h2>
+          <p id="syllabusSubtitle" style="color:var(--bg-ink-soft);font-size:0.9rem;margin:4px 0 0;">Select a course to view its syllabus</p>
+        </div>
+        <div id="syllabusContent"></div>
+      </section>
+
+      <!-- Office Hours section -->
+      <section id="officeView" class="sectionView hidden">
+        <div class="sectionHeader">
+          <h2 id="officeTitle">Office Hours</h2>
+          <p id="officeSubtitle" style="color:var(--bg-ink-soft);font-size:0.9rem;margin:4px 0 0;">Select a course to manage office hours</p>
+        </div>
+        <div id="officeContent"></div>
+      </section>
+
+      <!-- Day view -->
+      <section id="dayView" class="view hidden">
+        <div class="viewNav">
+          <div class="navGroup">
+            <button class="todayBtn" id="todayDay">Today</button>
+            <button class="navBtn" id="prevDay" aria-label="Previous day"><svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><polyline points="15 18 9 12 15 6"/></svg></button>
+          </div>
+          <h2 id="dayLabel"></h2>
+          <button class="navBtn" id="nextDay" aria-label="Next day"><svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><polyline points="9 18 15 12 9 6"/></svg></button>
+        </div>
+        <div class="tgOuter" id="dayTimeGrid"></div>
+      </section>
+
+      <section id="weekView" class="view hidden">
+        <div class="viewNav">
+          <div class="navGroup">
+            <button class="todayBtn" id="todayWeek">Today</button>
+            <button class="navBtn" id="prevWeek" aria-label="Previous week"><svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><polyline points="15 18 9 12 15 6"/></svg></button>
+          </div>
+          <h2 id="weekLabel"></h2>
+          <button class="navBtn" id="nextWeek" aria-label="Next week"><svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><polyline points="9 18 15 12 9 6"/></svg></button>
+        </div>
+        <div class="tgOuter" id="weekTimeGrid"></div>
+      </section>
+
+      <section id="monthView" class="view">
+        <div class="viewNav">
+          <div class="navGroup">
+            <button class="todayBtn" id="todayMonth">Today</button>
+            <button class="navBtn" id="prevMonth" aria-label="Previous month"><svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><polyline points="15 18 9 12 15 6"/></svg></button>
+          </div>
+          <h2 id="monthLabel"></h2>
+          <button class="navBtn" id="nextMonth" aria-label="Next month"><svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><polyline points="9 18 15 12 9 6"/></svg></button>
+        </div>
+        <div class="gridWrap">
+          <div class="weekdayRow"><span>Sun</span><span>Mon</span><span>Tue</span><span>Wed</span><span>Thu</span><span>Fri</span><span>Sat</span></div>
+          <div class="cellGrid" id="monthGrid"></div>
+        </div>
+      </section>
+    </main>
+  </div>
+</div>
+
+<div class="modal hidden" id="createCourseModal">
+  <div class="modalCard" style="width:380px;">
+    <div class="modalHeader">
+      <h3>Manage Courses</h3>
+      <button class="closeBtn" id="closeCreateCourse" aria-label="Close">×</button>
+    </div>
+    <div class="modalSection" id="manageCoursesListSection">
+      <h4>Your courses</h4>
+      <div id="manageCoursesList"></div>
+    </div>
+    <div class="modalSection">
+      <h4>Add a course</h4>
+    <div class="stackForm" style="gap:14px;">
+      <div>
+        <label for="newCourseName" style="font-size:0.74rem;color:var(--ink-faint);font-weight:600;display:block;margin-bottom:5px;">Course name</label>
+        <input type="text" id="newCourseName" placeholder="e.g. Chemistry 101" autocomplete="off">
+      </div>
+      <div>
+        <label style="font-size:0.74rem;color:var(--ink-faint);font-weight:600;display:block;margin-bottom:10px;">Color</label>
+        <!-- HSV spectrum canvas -->
+        <canvas id="colorSpectrumCanvas" width="320" height="160" style="width:100%;height:140px;border-radius:8px;cursor:crosshair;display:block;border:1px solid var(--border);"></canvas>
+        <!-- Hue slider -->
+        <canvas id="hueSliderCanvas" width="320" height="20" style="width:100%;height:18px;border-radius:4px;cursor:crosshair;display:block;margin-top:8px;border:1px solid var(--border);"></canvas>
+        <!-- Hex input + preview -->
+        <div style="display:flex;align-items:center;gap:10px;margin-top:10px;">
+          <div id="colorPickerPreview" style="width:36px;height:36px;border-radius:8px;border:1px solid var(--border);flex-shrink:0;background:#5b8def;"></div>
+          <div style="display:flex;align-items:center;gap:6px;flex:1;background:var(--surface-2);border:1px solid var(--border);border-radius:6px;padding:0 10px;">
+            <span style="color:var(--ink-faint);font-size:0.8rem;font-weight:700;">#</span>
+            <input type="text" id="colorHexInput" maxlength="6" value="5b8def" style="background:none;border:none;color:var(--ink);font-size:0.85rem;font-family:monospace;width:100%;padding:8px 0;outline:none;">
+          </div>
+        </div>
+        <!-- Quick colour swatches -->
+        <div style="display:flex;gap:7px;flex-wrap:wrap;margin-top:12px;" id="quickSwatches"></div>
+      </div>
+      <button class="smallBtn primary" id="confirmCreateCourse" style="margin-top:4px;">Add Course</button>
+    </div>
+    </div>
+  </div>
+</div>
+
+<div class="scrim hidden" id="scrim"></div>
+<div class="modal hidden" id="settingsModal">
+  <div class="modalCard">
+    <div class="modalHeader">
+      <h3>Settings</h3>
+      <button class="closeBtn" id="closeSettings" aria-label="Close">×</button>
+    </div>
+    <div class="modalSection">
+      <h4>Appearance</h4>
+      <div class="segmented" id="themeToggle">
+        <button class="themeSegBtn active" data-theme="dark">Dark</button>
+        <button class="themeSegBtn" data-theme="light">Light</button>
+      </div>
+    </div>
+    <div class="modalSection">
+      <h4>Background color</h4>
+      <canvas id="bgColorSpectrumCanvas" width="320" height="120" style="width:100%;height:100px;border-radius:8px;cursor:crosshair;display:block;border:1px solid var(--border);"></canvas>
+      <canvas id="bgHueSliderCanvas" width="320" height="20" style="width:100%;height:18px;border-radius:4px;cursor:crosshair;display:block;margin-top:8px;border:1px solid var(--border);"></canvas>
+      <div style="display:flex;align-items:center;gap:10px;margin-top:10px;">
+        <div id="bgColorPickerPreview" style="width:36px;height:36px;border-radius:8px;border:1px solid var(--border);flex-shrink:0;background:#16181C;"></div>
+        <div style="display:flex;align-items:center;gap:6px;flex:1;background:var(--surface-2);border:1px solid var(--border);border-radius:6px;padding:0 10px;">
+          <span style="color:var(--ink-faint);font-size:0.8rem;font-weight:700;">#</span>
+          <input type="text" id="bgColorHexInput" maxlength="6" value="16181C" style="background:none;border:none;color:var(--ink);font-size:0.85rem;font-family:monospace;width:100%;padding:8px 0;outline:none;">
+        </div>
+      </div>
+      <div style="display:flex;gap:7px;flex-wrap:wrap;margin-top:12px;" id="bgQuickSwatches"></div>
+      <div style="margin-top:12px;"><button class="ghostBtn" id="resetBg">Reset to theme default</button></div>
+    </div>
+    <div class="modalSection">
+      <h4>Course colors</h4>
+      <div id="colorRows"></div>
+    </div>
+  </div>
+</div>
+
+<script>
+/* ============ DATA ============ */
+/* ============ DATA ============ */
+/* Courses are fully user-defined — built from state.courses at runtime */
+let COURSES = {};
+
+const TYPE_LABEL = { class:"Class", exam:"Exam", due:"Due", club:"Club", office:"Office Hrs", event:"Event" };
+
+/* No built-in events — students add their own */
+const BUILTIN_EVENTS = [];
+
+/* ============ STATE ============ */
+const state = {
+  view: "month",
+  section: "calendar",   // "calendar" | "syllabus" | "clubs" | "office"
+  filters: new Set(["none"]),
+  completed: {},
+  customEvents: [],
+  notes: [],
+  courseColors: {},
+  weeks: [],
+  months: [],
+  bounds: { minKey: null, maxKey: null },
+  weekStartKey: null,
+  monthKey: null,
+  currentDate: null,
+  theme: "dark",
+  customBg: null
+};
+// Tracks which course colors the user has changed locally this session,
+// so a slow-resolving storage load can never stomp a fresh local edit.
+const courseColorsTouched = new Set();
+
+let ALL_EVENTS = [];
+let dateIndex = {};
+
+/* ============ HELPERS ============ */
+function pad(n){ return String(n).padStart(2,"0"); }
+function keyOf(y,m,d){ return `${y}-${pad(m+1)}-${pad(d)}`; }
+function parseKey(s){ const [y,m,d] = s.split("-").map(Number); return new Date(y, m-1, d); }
+function addDays(k, n){ const d = parseKey(k); d.setDate(d.getDate()+n); return keyOf(d.getFullYear(), d.getMonth(), d.getDate()); }
+function todayKey(){ const t = new Date(); return keyOf(t.getFullYear(), t.getMonth(), t.getDate()); }
+function genId(prefix){ return prefix + "-" + Date.now().toString(36) + Math.random().toString(36).slice(2,7); }
+function visible(ev){ return state.filters.has(ev.course); }
+/* Bright, unambiguous "main" colors only — no brown/black/gray/teal/etc. */
+const MAIN_COLOR_POOL = ["#E53935","#FB8C00","#FDD835","#43A047","#1E88E5","#8E24AA","#D81B60"];
+function randomMainColor(){
+  return MAIN_COLOR_POOL[Math.floor(Math.random() * MAIN_COLOR_POOL.length)];
+}
+function courseColor(key){
+  if (!key || key === "none") return randomMainColor();
+  return state.courseColors[key] || "#888888";
+}
+/* Events with no course ("— None —") each get their own independently
+   random main color, assigned once at creation and cached on the event
+   itself — so multiple none-events don't all end up sharing one color. */
+function eventColor(ev){
+  if (!ev.course || ev.course === "none") {
+    if (!ev.color) ev.color = randomMainColor();
+    return ev.color;
+  }
+  return courseColor(ev.course);
+}
+function findWeekStartFor(dateStr){
+  const d = parseKey(dateStr);
+  const sun = new Date(d); sun.setDate(sun.getDate() - sun.getDay());
+  return keyOf(sun.getFullYear(), sun.getMonth(), sun.getDate());
+}
+function luminance(hex){
+  let c = hex.replace("#","");
+  if (c.length === 3) c = c.split("").map(ch => ch+ch).join("");
+  const r = parseInt(c.substr(0,2),16)/255, g = parseInt(c.substr(2,2),16)/255, b = parseInt(c.substr(4,2),16)/255;
+  const lin = v => v <= 0.03928 ? v/12.92 : Math.pow((v+0.055)/1.055, 2.4);
+  return 0.2126*lin(r) + 0.7152*lin(g) + 0.0722*lin(b);
+}
+function textColorForCourses(keys){
+  if (!keys.length) return "";
+  const avg = keys.reduce((s,k) => s + luminance(courseColor(k)), 0) / keys.length;
+  return avg > 0.45 ? "#14161A" : "#F5F6F8";
+}
+function splitBackground(keys){
+  if (!keys.length) return "";
+  if (keys.length === 1) return `background:${courseColor(keys[0])};color:${textColorForCourses(keys)};`;
+  const n = keys.length;
+  const stops = keys.map((k,i) => {
+    const a = (i/n*100).toFixed(2), b = ((i+1)/n*100).toFixed(2);
+    return `${courseColor(k)} ${a}% ${b}%`;
+  });
+  return `background:linear-gradient(90deg, ${stops.join(", ")});color:${textColorForCourses(keys)};`;
+}
+/* Same as above, but operating on already-resolved hex colors (used for
+   events, since "none" events each carry their own individual color
+   rather than sharing one course-level color). */
+function textColorForColors(colors){
+  if (!colors.length) return "";
+  const avg = colors.reduce((s,c) => s + luminance(c), 0) / colors.length;
+  return avg > 0.45 ? "#14161A" : "#F5F6F8";
+}
+function splitBackgroundColors(colors){
+  if (!colors.length) return "";
+  if (colors.length === 1) return `background:${colors[0]};color:${textColorForColors(colors)};`;
+  const n = colors.length;
+  const stops = colors.map((c,i) => {
+    const a = (i/n*100).toFixed(2), b = ((i+1)/n*100).toFixed(2);
+    return `${c} ${a}% ${b}%`;
+  });
+  return `background:linear-gradient(90deg, ${stops.join(", ")});color:${textColorForColors(colors)};`;
+}
+
+/* Hard calendar bounds — independent of event dates */
+const CAL_MIN = "2026-09-01";
+const CAL_MAX = "2100-12-31";
+
+function rebuildAll(){
+  ALL_EVENTS = BUILTIN_EVENTS.concat(state.customEvents);
+  dateIndex = {};
+  ALL_EVENTS.forEach(ev => {
+    const start = parseKey(ev.date);
+    const end = ev.endDate ? parseKey(ev.endDate) : start;
+    const cur = new Date(start);
+    while (cur <= end) {
+      const k = keyOf(cur.getFullYear(), cur.getMonth(), cur.getDate());
+      (dateIndex[k] = dateIndex[k] || []).push(ev);
+      cur.setDate(cur.getDate() + 1);
+    }
+  });
+
+  /* Navigation bounds span the full calendar range, not just event dates */
+  const minD = parseKey(CAL_MIN);
+  const maxD = parseKey(CAL_MAX);
+  state.bounds = { minKey: CAL_MIN, maxKey: CAL_MAX };
+
+  /* Build week list from min to max — but DON'T pre-generate all 3900+ weeks
+     up front (too slow). Instead, derive them lazily from the current position. */
+  state.weeks  = null; // signal: use on-demand computation
+  state.months = null; // signal: use on-demand computation
+
+  const tKey = todayKey();
+  if (!state.weekStartKey){
+    const wk = findWeekStartFor(tKey);
+    state.weekStartKey = wk;
+  }
+  if (!state.monthKey){
+    state.monthKey = tKey.slice(0,7);
+  }
+  if (!state.currentDate){
+    state.currentDate = tKey;
+  }
+}
+
+/* Navigate months: add n months to a "YYYY-MM" key */
+function addMonths(mk, n){
+  const [y,m] = mk.split("-").map(Number);
+  let ny = y, nm = m - 1 + n;
+  while (nm > 11){ nm -= 12; ny++; }
+  while (nm < 0){ nm += 12; ny--; }
+  return `${ny}-${pad(nm+1)}`;
+}
+
+/* Navigate weeks: find next/prev Sun from a week-start key */
+function addWeeks(wk, n){ return addDays(wk, n * 7); }
+
+/* Check bounds */
+function monthInBounds(mk){ return mk >= CAL_MIN.slice(0,7) && mk <= CAL_MAX.slice(0,7); }
+function weekInBounds(wk){  return wk >= CAL_MIN && addDays(wk, 6) <= CAL_MAX; }
+function dayInBounds(dk){   return dk >= CAL_MIN && dk <= CAL_MAX; }
+
+/* ============ STORAGE ============ */
+/* window.storage is only present inside Claude's artifact sandbox. When this
+   file is opened as a plain local HTML file (the normal case), it doesn't
+   exist — so we always mirror every save to localStorage too, and that's
+   what's read back on a normal reload. window.storage (when present) is
+   still written/read preferentially, so nothing changes for that context.
+   Every storage call is wrapped so that a missing or broken storage
+   implementation NEVER throws into the UI code — the app always works
+   in memory, and persistence is a silent best-effort layer on top.
+
+   Saves are debounced: rapid-fire callers (e.g. dragging a color picker)
+   collapse into one write. Loads merge into current state so a slow
+   response landing after the user has already made local changes can
+   never overwrite those changes. */
+
+const saveTimers = {};
+const LOCAL_STORAGE_PREFIX = "hudsonTerminal:";
+
+function hasRemoteStorage(){
+  return typeof window.storage !== 'undefined' && window.storage !== null;
+}
+
+function scheduleSave(key, getValue, delay){
+  clearTimeout(saveTimers[key]);
+  saveTimers[key] = setTimeout(async () => {
+    const json = JSON.stringify(getValue());
+    try { localStorage.setItem(LOCAL_STORAGE_PREFIX + key, json); } catch(e){}
+    if (!hasRemoteStorage()) return;
+    for (let attempt = 1; attempt <= 3; attempt++){
+      try {
+        await window.storage.set(key, json, false);
+        return; // success
+      } catch(e){
+        if (attempt === 3) console.warn('Storage save failed after 3 attempts for', key, e.message);
+        else await new Promise(r => setTimeout(r, 400 * attempt));
+      }
+    }
+  }, delay);
+}
+
+async function storageGet(key){
+  if (hasRemoteStorage()){
+    try {
+      const res = await window.storage.get(key, false);
+      if (res && res.value) return res;
+    } catch(e){ /* fall through to localStorage */ }
+  }
+  try {
+    const raw = localStorage.getItem(LOCAL_STORAGE_PREFIX + key);
+    if (raw !== null) return { value: raw };
+  } catch(e){}
+  return null;
+}
+
+async function loadCompleted(){
+  const res = await storageGet("completed-events");
+  if (res && res.value){
+    const loaded = JSON.parse(res.value);
+    state.completed = { ...loaded, ...state.completed };
+  }
+  renderCurrentView();
+}
+function saveCompleted(){ scheduleSave("completed-events", () => state.completed, 250); }
+function toggleComplete(id){
+  state.completed[id] = !state.completed[id];
+  saveCompleted();
+  renderCurrentView();
+}
+
+async function loadCustomEvents(){
+  const res = await storageGet("custom-events");
+  if (res && res.value){
+    const loaded = JSON.parse(res.value);
+    const localIds = new Set(state.customEvents.map(e => e.id));
+    state.customEvents = loaded.filter(e => !localIds.has(e.id)).concat(state.customEvents);
+  }
+  rebuildAll();
+  renderCurrentView();
+}
+function saveCustomEvents(){ scheduleSave("custom-events", () => state.customEvents, 250); }
+function deleteCustomEvent(id){
+  state.customEvents = state.customEvents.filter(e => e.id !== id);
+  saveCustomEvents();
+  rebuildAll();
+  renderCurrentView();
+}
+
+async function loadNotes(){
+  const res = await storageGet("sidebar-notes");
+  if (res && res.value){
+    const loaded = JSON.parse(res.value);
+    const localIds = new Set(state.notes.map(n => n.id));
+    state.notes = state.notes.concat(loaded.filter(n => !localIds.has(n.id)));
+  }
+  renderNotes();
+}
+function saveNotes(){ scheduleSave("sidebar-notes", () => state.notes, 250); }
+
+function saveCourseColors(){ scheduleSave("course-colors", () => state.courseColors, 500); }
+
+async function loadCourses(){
+  // Load the persisted per-course colors alongside the courses themselves —
+  // otherwise a course's color (picked when it was created) would never
+  // survive a reload and would silently fall back to gray.
+  const [coursesRes, colorsRes] = await Promise.all([
+    storageGet("user-courses"),
+    storageGet("course-colors")
+  ]);
+  if (colorsRes && colorsRes.value){
+    const loadedColors = JSON.parse(colorsRes.value);
+    Object.keys(loadedColors).forEach(key => {
+      if (!courseColorsTouched.has(key)) state.courseColors[key] = loadedColors[key];
+    });
+  }
+  if (coursesRes && coursesRes.value){
+    const loaded = JSON.parse(coursesRes.value);
+    COURSES = loaded;
+    Object.keys(COURSES).forEach(k => {
+      if (!state.courseColors[k]) state.courseColors[k] = COURSES[k].color || "#888888";
+    });
+    state.filters = new Set(Object.keys(COURSES));
+    state.filters.add("none");
+  }
+  rebuildAll();
+  renderCourseSelect();
+  renderCurrentView();
+  renderSettingsColorRows();
+}
+function saveCourses(){
+  scheduleSave("user-courses", () => COURSES, 300);
+  scheduleSave("course-colors", () => state.courseColors, 300);
+}
+
+function addCourse(name, color){
+  // genId (not a bare Date.now() key) — two courses added within the same
+  // millisecond would otherwise generate an identical key and the second
+  // would silently overwrite the first in COURSES.
+  const key = genId("course");
+  COURSES[key] = { name };
+  state.courseColors[key] = color;
+  state.filters.add(key);
+  courseColorsTouched.add(key);
+  saveCourses();
+  rebuildAll();
+  renderCourseSelect();
+  renderCurrentView();
+  renderSettingsColorRows();
+  showToast(`"${name}" added`, color);
+}
+
+function deleteCourse(key){
+  delete COURSES[key];
+  delete state.courseColors[key];
+  state.filters.delete(key);
+  saveCourses();
+  rebuildAll();
+  renderCourseSelect();
+  renderCurrentView();
+  renderSettingsColorRows();
+}
+
+/* ============ RENDER: SIDEBAR ============ */
+function renderCourseSelect(){
+  const sel = document.getElementById("evCourse");
+  if (!sel) return;
+  const prev = sel.value;
+  sel.innerHTML = '<option value="none">— None —</option>';
+  const keys = Object.keys(COURSES);
+  keys.forEach(key => {
+    const opt = document.createElement("option");
+    opt.value = key; opt.textContent = COURSES[key].name;
+    sel.appendChild(opt);
+  });
+  sel.value = (prev && (prev === "none" || keys.includes(prev))) ? prev : "none";
+}
+
+function renderNotes(){
+  const list = document.getElementById("notesList");
+  list.innerHTML = "";
+  if (!state.notes.length) { list.innerHTML = '<li class="emptyHint">No notes yet.</li>'; return; }
+  state.notes.forEach(n => {
+    const li = document.createElement("li");
+    li.className = "noteRow";
+
+    const span = document.createElement("span");
+    span.className = "noteText";
+    span.textContent = n.text;
+
+    const del = document.createElement("button");
+    del.className = "delBtn";
+    del.textContent = "×";
+    del.setAttribute("aria-label", "Delete note");
+    del.addEventListener("click", () => {
+      state.notes = state.notes.filter(x => x.id !== n.id);
+      saveNotes();
+      renderNotes();
+    });
+
+    li.appendChild(span);
+    li.appendChild(del);
+    list.appendChild(li);
+  });
+}
+
+/* ============ RENDER: EVENT ROW ============ */
+function renderRow(ev){
+  const row = document.createElement("div");
+  row.className = "row" + (state.completed[ev.id] ? " done" : "");
+  row.style.setProperty("--sw", eventColor(ev));
+
+  if (ev.type !== "holiday") {
+    const cb = document.createElement("input");
+    cb.type = "checkbox";
+    cb.className = "cb";
+    cb.checked = !!state.completed[ev.id];
+    cb.addEventListener("change", () => toggleComplete(ev.id));
+    row.appendChild(cb);
+  }
+
+  const body = document.createElement("div");
+  body.className = "body";
+
+  const titleLine = document.createElement("div");
+  titleLine.className = "titleLine";
+  const title = document.createElement("span");
+  title.className = "title";
+  title.textContent = ev.title;
+  titleLine.appendChild(title);
+
+  const courseLbl = document.createElement("span");
+  courseLbl.className = "course";
+  courseLbl.textContent = (COURSES[ev.course] || {name: ev.course}).name;
+  titleLine.appendChild(courseLbl);
+
+  if (TYPE_LABEL[ev.type]) {
+    const badge = document.createElement("span");
+    badge.className = "badge" + (ev.type === "exam" ? " exam" : "");
+    badge.style.setProperty("--sw", eventColor(ev));
+    badge.textContent = TYPE_LABEL[ev.type];
+    titleLine.appendChild(badge);
+  }
+  body.appendChild(titleLine);
+
+  if (ev.detail) {
+    const detail = document.createElement("div");
+    detail.className = "detail";
+    detail.textContent = ev.detail;
+    body.appendChild(detail);
+  }
+  if (ev.endDate) {
+    const range = document.createElement("div");
+    range.className = "detail";
+    range.textContent = `Through ${parseKey(ev.endDate).toLocaleDateString("en-US",{month:"short",day:"numeric"})}`;
+    body.appendChild(range);
+  }
+  row.appendChild(body);
+
+  if (ev.custom) {
+    const del = document.createElement("button");
+    del.className = "delBtn";
+    del.textContent = "×";
+    del.setAttribute("aria-label", "Delete event");
+    del.addEventListener("click", (e) => { e.stopPropagation(); deleteCustomEvent(ev.id); });
+    row.appendChild(del);
+  }
+  return row;
+}
+
+/* ============ RENDER: DAY ============ */
+/* ============ TIME GRID HELPERS ============ */
+const TG_HOUR_PX = 64; // must match --tg-hour CSS var
+const HOURS = Array.from({length: 24}, (_,i) => i);
+
+function formatHour(h){
+  if (h === 0) return "12 AM";
+  if (h < 12) return `${h} AM`;
+  if (h === 12) return "12 PM";
+  return `${h-12} PM`;
+}
+
+/* Lay out a day's timed events so overlapping ones sit side-by-side instead
+   of stacking full-width on top of each other (which hid everything but the
+   topmost block). Returns [{ev, startMin, endMin, col, totalCols}, ...].
+   Standard calendar-overlap algorithm: sort by start time, chain events into
+   clusters wherever they overlap (directly or transitively through a shared
+   neighbor), then within each cluster greedily assign each event to the
+   first column whose previous occupant has already ended — falling back to
+   a new column when none is free. Every event in a cluster shares that
+   cluster's column count, so the whole cluster divides evenly. */
+function layoutTimedEvents(evs){
+  const items = evs.map(ev => {
+    const [sh, sm] = ev.startTime.split(":").map(Number);
+    const startMin = sh * 60 + sm;
+    let endMin = startMin + 60;
+    if (ev.endTime) {
+      const [eh, em] = ev.endTime.split(":").map(Number);
+      endMin = eh * 60 + em;
+      if (endMin <= startMin) endMin = startMin + 30;
+    }
+    return { ev, startMin, endMin };
+  });
+  items.sort((a, b) => a.startMin - b.startMin || a.endMin - b.endMin);
+
+  const clusters = [];
+  let cluster = [], clusterEnd = -Infinity;
+  items.forEach(item => {
+    if (cluster.length && item.startMin < clusterEnd) {
+      cluster.push(item);
+      clusterEnd = Math.max(clusterEnd, item.endMin);
+    } else {
+      if (cluster.length) clusters.push(cluster);
+      cluster = [item];
+      clusterEnd = item.endMin;
+    }
+  });
+  if (cluster.length) clusters.push(cluster);
+
+  clusters.forEach(group => {
+    const columnEnds = []; // last endMin occupying each column
+    group.forEach(item => {
+      let col = columnEnds.findIndex(end => item.startMin >= end);
+      if (col === -1) { col = columnEnds.length; columnEnds.push(item.endMin); }
+      else columnEnds[col] = item.endMin;
+      item.col = col;
+    });
+    const totalCols = columnEnds.length;
+    group.forEach(item => { item.totalCols = totalCols; });
+  });
+
+  return items;
+}
+
+/* Build the quick-add form node, pre-scoped to a date key */
+function buildQuickAdd(k, onAdded){
+  const wrap = document.createElement("div");
+  wrap.className = "quickAddWrap";
+
+  const toggle = document.createElement("button");
+  toggle.className = "quickAddToggle";
+  toggle.type = "button";
+  toggle.innerHTML = '<span class="plus">+</span> Add event for this day';
+  wrap.appendChild(toggle);
+
+  const form = document.createElement("div");
+  form.className = "quickAddForm";
+
+  const titleInput = document.createElement("input");
+  titleInput.type = "text";
+  titleInput.placeholder = "Event title";
+  titleInput.autocomplete = "off";
+  form.appendChild(titleInput);
+
+  const row = document.createElement("div");
+  row.className = "quickAddRow";
+
+  const courseSelect = document.createElement("select");
+  const noneOpt = document.createElement("option");
+  noneOpt.value = "none"; noneOpt.textContent = "— None —";
+  courseSelect.appendChild(noneOpt);
+  Object.entries(COURSES).forEach(([key, c]) => {
+    const opt = document.createElement("option");
+    opt.value = key; opt.textContent = c.name;
+    courseSelect.appendChild(opt);
+  });
+  courseSelect.value = "none";
+  row.appendChild(courseSelect);
+
+
+  form.appendChild(row);
+
+  // Time row
+  const timeRow = document.createElement("div");
+  timeRow.className = "quickAddRow";
+  timeRow.style.alignItems = "center";
+  const startTimeInput = document.createElement("input");
+  startTimeInput.type = "time";
+  startTimeInput.style.flex = "1";
+  const timeSep = document.createElement("span");
+  timeSep.textContent = "to";
+  timeSep.style.cssText = "color:var(--ink-faint);font-size:0.8rem;flex-shrink:0;";
+  const endTimeInput = document.createElement("input");
+  endTimeInput.type = "time";
+  endTimeInput.style.flex = "1";
+  timeRow.appendChild(startTimeInput);
+  timeRow.appendChild(timeSep);
+  timeRow.appendChild(endTimeInput);
+  form.appendChild(timeRow);
+
+  const detailInput = document.createElement("input");
+  detailInput.type = "text";
+  detailInput.placeholder = "Notes (optional)";
+  detailInput.autocomplete = "off";
+  form.appendChild(detailInput);
+
+  const actions = document.createElement("div");
+  actions.className = "quickAddActions";
+
+  const cancelBtn = document.createElement("button");
+  cancelBtn.type = "button"; cancelBtn.className = "ghostBtn"; cancelBtn.textContent = "Cancel";
+  cancelBtn.addEventListener("click", () => {
+    form.classList.remove("open");
+    titleInput.value = ""; detailInput.value = "";
+    startTimeInput.value = ""; endTimeInput.value = "";
+  });
+
+  const addBtn = document.createElement("button");
+  addBtn.type = "button"; addBtn.className = "smallBtn primary"; addBtn.textContent = "Add";
+  addBtn.addEventListener("click", () => {
+    const title = titleInput.value.trim();
+    if (!title){ titleInput.focus(); return; }
+    const ev = { id: genId("custom"), course: courseSelect.value, date: k,
+      type: "event", title, detail: detailInput.value.trim(),
+      startTime: startTimeInput.value || null, endTime: endTimeInput.value || null,
+      custom: true };
+    state.customEvents.push(ev);
+    saveCustomEvents(); rebuildAll();
+    showToast(`"${title}" added`, eventColor(ev));
+    if (onAdded) onAdded();
+  });
+
+  actions.appendChild(cancelBtn); actions.appendChild(addBtn);
+  form.appendChild(actions); wrap.appendChild(form);
+
+  toggle.addEventListener("click", () => {
+    form.classList.toggle("open");
+    if (form.classList.contains("open")){ titleInput.focus(); document.getElementById("evDate").value = k; }
+  });
+
+  return wrap;
+}
+
+/* Build the shared time-column grid for an array of dateKeys */
+function buildTimeGrid(container, dateKeys, showDayHeader, hideAllDay){
+  container.innerHTML = "";
+  const tKey = todayKey();
+  const totalH = TG_HOUR_PX * 24;
+
+  /* --- Scrollable time body --- */
+  /* Created up front so the day-header (below) can live inside it as a
+     sticky child — putting both in the same scroll container guarantees
+     their day columns share the exact same scrollbar-adjusted width. */
+  const scroll = document.createElement("div");
+  scroll.className = "tgScroll";
+
+  /* --- Day-header bar (week view) --- */
+  let hdrEl = null;
+  if (showDayHeader){
+    const hdr = document.createElement("div");
+    hdr.className = "tgDayHeader";
+
+    const gutter = document.createElement("div");
+    gutter.className = "tgDayHeaderGutter";
+    hdr.appendChild(gutter);
+
+    const headerCols = document.createElement("div");
+    headerCols.className = "tgDayHeaderCols";
+
+    const DOW = ["Sun","Mon","Tue","Wed","Thu","Fri","Sat"];
+    dateKeys.forEach(k => {
+      const d = parseKey(k);
+      const col = document.createElement("div");
+      col.className = "tgDayCol" + (k === tKey ? " isToday" : "");
+      const dowDiv = document.createElement("div");
+      dowDiv.textContent = DOW[d.getDay()];
+      const numDiv = document.createElement("div");
+      numDiv.className = "tgDayNum";
+      numDiv.textContent = d.getDate();
+      col.appendChild(dowDiv);
+      col.appendChild(numDiv);
+      col.addEventListener("click", () => goToDay(k));
+      headerCols.appendChild(col);
+    });
+
+    hdr.appendChild(headerCols);
+    scroll.appendChild(hdr);
+    hdrEl = hdr;
+  }
+
+  /* --- All-day strip (skipped in Day view) --- */
+  if (!hideAllDay) {
+  const allDay = document.createElement("div");
+  allDay.className = "tgAllDay";
+
+  const allDayGutter = document.createElement("div");
+  allDayGutter.className = "tgAllDayGutter";
+  allDayGutter.textContent = "ALL DAY";
+  allDay.appendChild(allDayGutter);
+
+  const allDaySlots = document.createElement("div");
+  allDaySlots.className = "tgAllDaySlots";
+
+  dateKeys.forEach(k => {
+    const cell = document.createElement("div");
+    cell.className = "tgAllDayCell";
+    const evs = (dateIndex[k] || []).filter(visible);
+    evs.slice(0, 3).forEach(ev => {
+      const chip = document.createElement("div");
+      chip.className = "tgChip";
+      chip.textContent = ev.title;
+      chip.style.background = eventColor(ev);
+      chip.style.color = textColorForColors([eventColor(ev)]);
+      chip.addEventListener("click", () => goToDay(k));
+      cell.appendChild(chip);
+    });
+    if (evs.length > 3){
+      const more = document.createElement("div");
+      more.style.cssText = "font-size:0.63rem;color:var(--ink-faint);padding:1px 3px;font-weight:600;";
+      more.textContent = "+" + (evs.length - 3) + " more";
+      cell.appendChild(more);
+    }
+    allDaySlots.appendChild(cell);
+  });
+
+  allDay.appendChild(allDaySlots);
+  container.appendChild(allDay);
+  } // end if (!hideAllDay)
+
+  const body = document.createElement("div");
+  body.className = "tgBody";
+
+  /* Hour labels */
+  const labels = document.createElement("div");
+  labels.className = "tgLabels";
+  HOURS.forEach(h => {
+    const lbl = document.createElement("div");
+    lbl.className = "tgHourLabel" + (h === 0 ? " midnight" : "");
+    lbl.style.height = TG_HOUR_PX + "px";
+    lbl.textContent = formatHour(h);
+    labels.appendChild(lbl);
+  });
+  body.appendChild(labels);
+
+  /* Column zone */
+  const colZone = document.createElement("div");
+  colZone.className = "tgColZone";
+  colZone.style.height = totalH + "px";
+
+  /* Hour lines layer */
+  const linesLayer = document.createElement("div");
+  linesLayer.className = "tgLines";
+  HOURS.forEach(h => {
+    const line = document.createElement("div");
+    line.className = "tgLine";
+    line.style.top = (h * TG_HOUR_PX) + "px";
+    linesLayer.appendChild(line);
+    const half = document.createElement("div");
+    half.className = "tgLine half";
+    half.style.top = (h * TG_HOUR_PX + TG_HOUR_PX / 2) + "px";
+    linesLayer.appendChild(half);
+  });
+  colZone.appendChild(linesLayer);
+
+  /* Current-time indicator */
+  if (dateKeys.includes(tKey)){
+    const now = new Date();
+    const pct = (now.getHours() + now.getMinutes() / 60) / 24;
+    const topPx = Math.round(pct * totalH);
+    const idx = dateKeys.indexOf(tKey);
+    const colW = 100 / dateKeys.length;
+
+    const nowLine = document.createElement("div");
+    nowLine.className = "tgNow";
+    nowLine.style.top = topPx + "px";
+    nowLine.style.left = (idx * colW) + "%";
+    nowLine.style.right = ((dateKeys.length - idx - 1) * colW) + "%";
+    linesLayer.appendChild(nowLine);
+
+    // Offset by the sticky header's own height, since it now lives inside
+    // the scroll container's content (ahead of the grid) rather than
+    // outside it — otherwise the initial scroll position would land short.
+    requestAnimationFrame(() => { scroll.scrollTop = Math.max(0, topPx - 120 + (hdrEl ? hdrEl.offsetHeight : 0)); });
+  } else {
+    requestAnimationFrame(() => { scroll.scrollTop = 8 * TG_HOUR_PX - 40 + (hdrEl ? hdrEl.offsetHeight : 0); });
+  }
+
+  /* Day columns — with timed event blocks */
+  dateKeys.forEach(k => {
+    const slot = document.createElement("div");
+    slot.className = "tgDaySlot";
+    slot.style.height = totalH + "px";
+    slot.addEventListener("click", () => goToDay(k));
+
+    // Render timed events as positioned blocks — overlapping events are laid
+    // out side-by-side (each taking a fraction of the column's width)
+    // instead of stacking full-width on top of each other, which used to
+    // hide everything but the topmost event's block.
+    const timedEvs = (dateIndex[k] || []).filter(ev => visible(ev) && ev.startTime);
+    const laidOut = layoutTimedEvents(timedEvs);
+    laidOut.forEach(({ ev, startMin, endMin, col, totalCols }) => {
+      const topPx = (startMin / 60) * TG_HOUR_PX;
+      const heightPx = Math.max(((endMin - startMin) / 60) * TG_HOUR_PX, 22);
+      const widthPct = 100 / totalCols;
+      const leftPct = col * widthPct;
+
+      const block = document.createElement("div");
+      block.className = "tgEvent";
+      block.style.top = topPx + "px";
+      block.style.height = heightPx + "px";
+      block.style.left = `calc(${leftPct}% + 2px)`;
+      block.style.width = `calc(${widthPct}% - 4px)`;
+      block.style.background = eventColor(ev);
+      block.style.color = textColorForColors([eventColor(ev)]);
+
+      const label = document.createElement("div");
+      label.style.fontWeight = "700";
+      label.style.overflow = "hidden";
+      label.style.textOverflow = "ellipsis";
+      label.style.whiteSpace = "nowrap";
+      label.textContent = ev.title;
+      block.appendChild(label);
+
+      if (heightPx > 36) {
+        const timeLabel = document.createElement("div");
+        timeLabel.style.cssText = "font-size:0.65rem;opacity:0.85;margin-top:2px;";
+        const fmt = t => { const [h,m]=t.split(":"); const hh=+h; return `${hh>12?hh-12:hh||12}:${m} ${hh>=12?"PM":"AM"}`; };
+        timeLabel.textContent = fmt(ev.startTime) + (ev.endTime ? ` – ${fmt(ev.endTime)}` : "");
+        block.appendChild(timeLabel);
+      }
+
+      block.addEventListener("click", e => { e.stopPropagation(); goToDay(k); });
+      slot.appendChild(block);
+    });
+
+    colZone.appendChild(slot);
+  });
+
+  body.appendChild(colZone);
+  scroll.appendChild(body);
+  container.appendChild(scroll);
+}
+
+/* ============ RENDER: DAY ============ */
+function renderDay(){
+  const k = state.currentDate;
+  const d = parseKey(k);
+  const isToday = k === todayKey();
+  document.getElementById("dayLabel").innerHTML =
+    d.toLocaleDateString("en-US", { weekday: "long", month: "long", day: "numeric", year: "numeric" }) +
+    (isToday ? '<span class="todayPill">Today</span>' : "");
+  document.getElementById("prevDay").disabled = !dayInBounds(addDays(k, -1));
+  document.getElementById("nextDay").disabled = !dayInBounds(addDays(k,  1));
+
+  const container = document.getElementById("dayTimeGrid");
+  buildTimeGrid(container, [k], false, true); // last arg = hideAllDay
+
+  /* Event list + quick-add below the grid */
+  const evs = (dateIndex[k]||[]).filter(visible);
+  const listWrap = document.createElement("div");
+  listWrap.className = "dayEvList";
+
+  if (!evs.length){
+    const empty = document.createElement("p");
+    empty.className = "emptyState";
+    empty.textContent = "No events scheduled for this day.";
+    listWrap.appendChild(empty);
+  } else {
+    evs.forEach(ev => listWrap.appendChild(renderRow(ev)));
+  }
+
+  listWrap.appendChild(buildQuickAdd(k, () => renderDay()));
+  container.appendChild(listWrap);
+}
+
+/* ============ SHARED CELL (Week + Month render identical cells) ============ */
+function buildCell(d, targetMonth){
+  const k = keyOf(d.getFullYear(), d.getMonth(), d.getDate());
+  const dayEvents = (dateIndex[k] || []).filter(visible);
+  const cellColors = [...new Set(dayEvents.map(e => eventColor(e)))];
+  const tKey = todayKey();
+
+  const cell = document.createElement("div");
+  cell.className = "cell"
+    + (dayEvents.length ? " hasEvents" : "")
+    + (targetMonth !== undefined && d.getMonth() !== targetMonth ? " otherMonth" : "")
+    + (k === tKey ? " isToday" : "");
+  if (dayEvents.length) cell.setAttribute("style", splitBackgroundColors(cellColors));
+
+  const num = document.createElement("div");
+  num.className = "dnum";
+  num.textContent = d.getDate();
+  cell.appendChild(num);
+
+  const evWrap = document.createElement("div");
+  evWrap.className = "cellEvents";
+  const shown = dayEvents.slice(0, 3);
+  shown.forEach(ev => {
+    const line = document.createElement("div");
+    line.className = "evLine";
+    line.textContent = ev.title;
+    evWrap.appendChild(line);
+  });
+  if (dayEvents.length > 3) {
+    const more = document.createElement("div");
+    more.className = "more";
+    more.textContent = `+${dayEvents.length - 3} more`;
+    evWrap.appendChild(more);
+  }
+  cell.appendChild(evWrap);
+
+  cell.addEventListener("click", () => goToDay(k));
+  return cell;
+}
+
+/* ============ RENDER: WEEK ============ */
+function renderWeek(){
+  const startKey = state.weekStartKey;
+  const start = parseKey(startKey);
+  const end = new Date(start); end.setDate(end.getDate() + 6);
+  const opts = { month: "short", day: "numeric" };
+  document.getElementById("weekLabel").textContent =
+    `${start.toLocaleDateString("en-US", opts)} \u2013 ${end.toLocaleDateString("en-US", opts)}, ${end.getFullYear()}`;
+
+  const prevWk = addWeeks(startKey, -1);
+  const nextWk = addWeeks(startKey,  1);
+  document.getElementById("prevWeek").disabled = !weekInBounds(prevWk);
+  document.getElementById("nextWeek").disabled = !weekInBounds(nextWk);
+
+  const dateKeys = [];
+  for (let i = 0; i < 7; i++){
+    const d = new Date(start); d.setDate(d.getDate() + i);
+    dateKeys.push(keyOf(d.getFullYear(), d.getMonth(), d.getDate()));
+  }
+  const container = document.getElementById("weekTimeGrid");
+  // Same layout as Day view: no all-day strip on the grid itself — instead,
+  // every event for the week (timed or not) is listed below it, grouped by day.
+  buildTimeGrid(container, dateKeys, true, true);
+
+  const DOW = ["Sun","Mon","Tue","Wed","Thu","Fri","Sat"];
+  const listWrap = document.createElement("div");
+  listWrap.className = "dayEvList";
+  let anyEvents = false;
+  dateKeys.forEach(k => {
+    const evs = (dateIndex[k] || []).filter(visible);
+    if (!evs.length) return;
+    anyEvents = true;
+    const d = parseKey(k);
+    const heading = document.createElement("div");
+    heading.className = "weekListHeading" + (k === todayKey() ? " isToday" : "");
+    heading.textContent = `${DOW[d.getDay()]}, ${d.toLocaleDateString("en-US", { month: "short", day: "numeric" })}`;
+    listWrap.appendChild(heading);
+    evs.forEach(ev => listWrap.appendChild(renderRow(ev)));
+  });
+  if (!anyEvents){
+    const empty = document.createElement("p");
+    empty.className = "emptyState";
+    empty.textContent = "No events scheduled this week.";
+    listWrap.appendChild(empty);
+  }
+  container.appendChild(listWrap);
+}
+
+/* ============ RENDER: MONTH ============ */
+function renderMonth(){
+  const [yStr, mStr] = state.monthKey.split("-");
+  const year = Number(yStr), month = Number(mStr) - 1;
+  document.getElementById("monthLabel").textContent =
+    new Date(year, month, 1).toLocaleDateString("en-US", { month: "long", year: "numeric" });
+
+  const prevMk = addMonths(state.monthKey, -1);
+  const nextMk = addMonths(state.monthKey,  1);
+  document.getElementById("prevMonth").disabled = !monthInBounds(prevMk);
+  document.getElementById("nextMonth").disabled = !monthInBounds(nextMk);
+
+  const grid = document.getElementById("monthGrid");
+  grid.innerHTML = "";
+  const first = new Date(year, month, 1);
+  const daysInMonth = new Date(year, month + 1, 0).getDate();
+  const startDow = first.getDay();
+  const totalCells = startDow + daysInMonth;
+  const rows = Math.ceil(totalCells / 7);
+
+  grid.style.gridTemplateRows = `repeat(${rows}, 1fr)`;
+
+  for (let i = 0; i < startDow; i++) {
+    const spacer = document.createElement("div");
+    spacer.className = "cell cellEmpty";
+    grid.appendChild(spacer);
+  }
+
+  for (let d = 1; d <= daysInMonth; d++) {
+    const date = new Date(year, month, d);
+    grid.appendChild(buildCell(date, month));
+  }
+}
+
+/* ============ VIEW SWITCHING ============ */
+function goToDay(k){
+  state.currentDate = k;
+  setView("day");
+}
+function setView(v){
+  state.view = v;
+  document.querySelectorAll(".segBtn").forEach(b => b.classList.toggle("active", b.dataset.view === v));
+  if (state.section === "calendar"){
+    document.getElementById("dayView").classList.toggle("hidden",   v !== "day");
+    document.getElementById("weekView").classList.toggle("hidden",  v !== "week");
+    document.getElementById("monthView").classList.toggle("hidden", v !== "month");
+  }
+  renderCurrentView();
+}
+function renderCurrentView(){
+  if (state.view === "day") renderDay();
+  else if (state.view === "week") renderWeek();
+  else renderMonth();
+  // Swap canvas to the correct view+period (safe if draw system not yet loaded)
+}
+
+/* --- Smooth slide transition ---
+   Direct CSS translate on the section element itself — no DOM cloning.
+   GPU-composited, cancellable mid-animation, no stale overlays. */
+
+let slideTimer = null;
+
+function slideNavigate(direction, updateState, renderFn){
+  // Cancel any in-flight animation immediately
+  if (slideTimer) {
+    clearTimeout(slideTimer);
+    slideTimer = null;
+  }
+
+  const sectionId = state.view === "day"  ? "dayView"
+                  : state.view === "week" ? "weekView" : "monthView";
+  const section = document.getElementById(sectionId);
+
+  // Kill any running transition on the section
+  section.style.transition = "none";
+  section.style.transform  = "none";
+
+  // Update state and render new content
+  updateState();
+  renderFn();
+
+  // Start the new content from off-screen, then slide it to 0
+  const fromX = direction > 0 ? "30%" : "-30%";
+  section.style.transition = "none";
+  section.style.transform  = `translateX(${fromX})`;
+  section.style.opacity    = "0";
+
+  // Force layout so browser registers the starting transform
+  section.getBoundingClientRect();
+
+  const easing = "0.22s cubic-bezier(0.4,0,0.2,1)";
+  section.style.transition = `transform ${easing}, opacity ${easing}`;
+  section.style.transform  = "translateX(0)";
+  section.style.opacity    = "1";
+
+  // Cleanup after animation
+  slideTimer = setTimeout(() => {
+    section.style.transition = "";
+    section.style.transform  = "";
+    section.style.opacity    = "";
+    slideTimer = null;
+  }, 240);
+}
+
+
+document.querySelectorAll(".segBtn").forEach(btn => {
+  btn.addEventListener("click", () => setView(btn.dataset.view));
+});
+
+document.getElementById("prevDay").addEventListener("click", () => {
+  const nk = addDays(state.currentDate, -1);
+  if (dayInBounds(nk)) slideNavigate(-1, () => { state.currentDate = nk; }, renderDay);
+});
+document.getElementById("nextDay").addEventListener("click", () => {
+  const nk = addDays(state.currentDate, 1);
+  if (dayInBounds(nk)) slideNavigate(1, () => { state.currentDate = nk; }, renderDay);
+});
+document.getElementById("todayDay").addEventListener("click", () => {
+  const dir = todayKey() >= state.currentDate ? 1 : -1;
+  slideNavigate(dir, () => { state.currentDate = todayKey(); }, renderDay);
+});
+
+document.getElementById("prevWeek").addEventListener("click", () => {
+  const nk = addWeeks(state.weekStartKey, -1);
+  if (weekInBounds(nk)) slideNavigate(-1, () => { state.weekStartKey = nk; }, renderWeek);
+});
+document.getElementById("nextWeek").addEventListener("click", () => {
+  const nk = addWeeks(state.weekStartKey, 1);
+  if (weekInBounds(nk)) slideNavigate(1, () => { state.weekStartKey = nk; }, renderWeek);
+});
+document.getElementById("todayWeek").addEventListener("click", () => {
+  const wk = findWeekStartFor(todayKey());
+  const dir = wk >= state.weekStartKey ? 1 : -1;
+  slideNavigate(dir, () => { state.weekStartKey = wk; }, renderWeek);
+});
+
+document.getElementById("prevMonth").addEventListener("click", () => {
+  const nk = addMonths(state.monthKey, -1);
+  if (monthInBounds(nk)) slideNavigate(-1, () => { state.monthKey = nk; }, renderMonth);
+});
+document.getElementById("nextMonth").addEventListener("click", () => {
+  const nk = addMonths(state.monthKey, 1);
+  if (monthInBounds(nk)) slideNavigate(1, () => { state.monthKey = nk; }, renderMonth);
+});
+document.getElementById("todayMonth").addEventListener("click", () => {
+  const mk = todayKey().slice(0,7);
+  const dir = mk >= state.monthKey ? 1 : -1;
+  slideNavigate(dir, () => { state.monthKey = mk; }, renderMonth);
+});
+
+document.getElementById("noteForm").addEventListener("submit", (e) => {
+  e.preventDefault();
+  const input = document.getElementById("noteInput");
+  const text = input.value.trim();
+  if (!text) return;
+  state.notes.unshift({ id: genId("note"), text });
+  saveNotes();
+  renderNotes();
+  input.value = "";
+});
+
+/* ============ RECURRING TOGGLE ============ */
+document.getElementById("evRecurring").addEventListener("change", function(){
+  const opts = document.getElementById("recurringOptions");
+  opts.style.display = this.checked ? "flex" : "none";
+  opts.style.flexDirection = "column";
+  opts.style.gap = "8px";
+});
+
+/* Generate recurring event instances between startDate and endDate */
+function generateRecurringDates(startDate, freq, endDate){
+  const dates = [];
+  const cur = parseKey(startDate);
+  const end = parseKey(endDate);
+  while (cur <= end){
+    dates.push(keyOf(cur.getFullYear(), cur.getMonth(), cur.getDate()));
+    if (freq === "daily")   cur.setDate(cur.getDate() + 1);
+    else if (freq === "weekly") cur.setDate(cur.getDate() + 7);
+    else if (freq === "monthly") cur.setMonth(cur.getMonth() + 1);
+    else break;
+    if (dates.length > 500) break; // safety cap
+  }
+  return dates;
+}
+
+/* ============ SYLLABUS SECTION ============ */
+/* State: syllabusState.courseKey = null (grid view) or key (detail view) */
+const syllabusState = { courseKey: null };
+/* In-memory store for topics per course: { [courseKey]: [{id, text}] } */
+const syllabusTopics = {};
+
+async function loadSyllabusTopics(){
+  const res = await storageGet("syllabus-topics");
+  if (res && res.value) Object.assign(syllabusTopics, JSON.parse(res.value));
+}
+function saveSyllabusTopics(){ scheduleSave("syllabus-topics", () => syllabusTopics, 300); }
+
+function renderSyllabusSection(){
+  const content = document.getElementById("syllabusContent");
+  const titleEl = document.getElementById("syllabusTitle");
+  const subtitleEl = document.getElementById("syllabusSubtitle");
+  let backBtn = document.getElementById("syllabusBack");
+  if (!backBtn){
+    backBtn = document.createElement("button");
+    backBtn.id = "syllabusBack";
+    backBtn.className = "sectionBackBtn";
+    backBtn.innerHTML = "← Back";
+    backBtn.addEventListener("click", () => {
+      syllabusState.courseKey = null;
+      renderSyllabusSection();
+    });
+    document.getElementById("syllabusView").querySelector(".sectionHeader").prepend(backBtn);
+  }
+
+  if (!syllabusState.courseKey){
+    // Course grid
+    titleEl.textContent = "Syllabus";
+    subtitleEl.textContent = "Select a course";
+    backBtn.classList.remove("visible");
+    const keys = Object.keys(COURSES);
+    if (!keys.length){
+      content.innerHTML = '<div class="courseGrid"><p class="emptyCourseHint">No courses yet. Add one using the Manage Courses button.</p></div>';
+      return;
+    }
+    const grid = document.createElement("div");
+    grid.className = "courseGrid";
+    keys.forEach(k => {
+      const c = COURSES[k];
+      const card = document.createElement("div");
+      card.className = "courseCard";
+      card.style.setProperty("--sw", courseColor(k));
+      card.innerHTML = `<div class="ccName">${c.name}</div><div class="ccSub">${(syllabusTopics[k]||[]).length} topic${(syllabusTopics[k]||[]).length !== 1?"s":""}</div>`;
+      card.addEventListener("click", () => { syllabusState.courseKey = k; renderSyllabusSection(); });
+      grid.appendChild(card);
+    });
+    content.innerHTML = "";
+    content.appendChild(grid);
+  } else {
+    // Topic detail for one course
+    const k = syllabusState.courseKey;
+    const c = COURSES[k];
+    titleEl.textContent = c ? c.name : "Course";
+    subtitleEl.textContent = "Topics & schedule";
+    backBtn.classList.add("visible");
+    if (!syllabusTopics[k]) syllabusTopics[k] = [];
+    content.innerHTML = "";
+
+    const topicList = document.createElement("div");
+    topicList.className = "topicList";
+    syllabusTopics[k].forEach((topic, i) => {
+      const item = document.createElement("div");
+      item.className = "topicItem" + (topic.done ? " done" : "");
+      item.style.setProperty("--sw", courseColor(k));
+      const check = document.createElement("input");
+      check.type = "checkbox";
+      check.className = "topicCheck";
+      check.checked = !!topic.done;
+      check.addEventListener("change", () => {
+        topic.done = check.checked;
+        saveSyllabusTopics();
+        renderSyllabusSection();
+      });
+      const text = document.createElement("div");
+      text.className = "topicText";
+      text.textContent = topic.text;
+      const del = document.createElement("button");
+      del.className = "delBtn"; del.textContent = "×";
+      del.title = "Delete topic";
+      del.addEventListener("click", () => {
+        syllabusTopics[k].splice(i, 1);
+        saveSyllabusTopics();
+        renderSyllabusSection();
+      });
+      item.appendChild(check);
+      item.appendChild(text);
+      item.appendChild(del);
+      topicList.appendChild(item);
+    });
+    content.appendChild(topicList);
+
+    // Add topic row
+    const addRow = document.createElement("div");
+    addRow.className = "addTopicRow";
+    const inp = document.createElement("input");
+    inp.type = "text"; inp.placeholder = "Add a topic…"; inp.autocomplete = "off";
+    inp.className = "";
+    inp.style.cssText = "background:var(--surface-2);border:1px solid var(--border);color:var(--ink);border-radius:var(--radius-sm);padding:8px 10px;font:inherit;font-size:0.82rem;flex:1;";
+    const btn = document.createElement("button");
+    btn.className = "smallBtn primary"; btn.textContent = "Add";
+    btn.addEventListener("click", () => {
+      const text = inp.value.trim();
+      if (!text) return;
+      syllabusTopics[k].push({ id: genId("topic"), text });
+      saveSyllabusTopics();
+      inp.value = "";
+      renderSyllabusSection();
+    });
+    inp.addEventListener("keydown", e => { if (e.key === "Enter") btn.click(); });
+    addRow.appendChild(inp); addRow.appendChild(btn);
+    content.appendChild(addRow);
+  }
+}
+
+/* ============ OFFICE HOURS SECTION ============ */
+const officeState = { courseKey: null };
+/* officeHours: { [courseKey]: [{id, day:0-4(Mon-Fri), startHour, endHour, label}] } */
+const officeHours = {};
+
+async function loadOfficeHours(){
+  const res = await storageGet("office-hours");
+  if (res && res.value) Object.assign(officeHours, JSON.parse(res.value));
+}
+function saveOfficeHours(){ scheduleSave("office-hours", () => officeHours, 300); }
+
+const OH_DAYS = ["Mon","Tue","Wed","Thu","Fri"];
+const OH_HOURS = [8,9,10,11,12,13,14,15,16,17,18]; // 8 AM–6 PM
+
+function renderOfficeSection(){
+  const content = document.getElementById("officeContent");
+  const titleEl = document.getElementById("officeTitle");
+  const subtitleEl = document.getElementById("officeSubtitle");
+  let backBtn = document.getElementById("officeBack");
+  if (!backBtn){
+    backBtn = document.createElement("button");
+    backBtn.id = "officeBack"; backBtn.className = "sectionBackBtn";
+    backBtn.innerHTML = "← Back";
+    backBtn.addEventListener("click", () => { officeState.courseKey = null; renderOfficeSection(); });
+    document.getElementById("officeView").querySelector(".sectionHeader").prepend(backBtn);
+  }
+
+  if (!officeState.courseKey){
+    titleEl.textContent = "Office Hours";
+    subtitleEl.textContent = "Select a course";
+    backBtn.classList.remove("visible");
+    const keys = Object.keys(COURSES);
+    if (!keys.length){
+      content.innerHTML = '<div class="courseGrid"><p class="emptyCourseHint">No courses yet. Add a course first.</p></div>';
+      return;
+    }
+    const grid = document.createElement("div");
+    grid.className = "courseGrid";
+    keys.forEach(k => {
+      const c = COURSES[k];
+      const card = document.createElement("div");
+      card.className = "courseCard";
+      card.style.setProperty("--sw", courseColor(k));
+      const count = (officeHours[k]||[]).length;
+      card.innerHTML = `<div class="ccName">${c.name}</div><div class="ccSub">${count} block${count!==1?"s":""} scheduled</div>`;
+      card.addEventListener("click", () => { officeState.courseKey = k; renderOfficeSection(); });
+      grid.appendChild(card);
+    });
+    content.innerHTML = "";
+    content.appendChild(grid);
+  } else {
+    const k = officeState.courseKey;
+    const c = COURSES[k];
+    titleEl.textContent = c ? c.name + " — Office Hours" : "Office Hours";
+    subtitleEl.textContent = "Add a block above with the exact start and end time";
+    backBtn.classList.add("visible");
+    if (!officeHours[k]) officeHours[k] = [];
+    content.innerHTML = "";
+
+    const OH_START_MIN = OH_HOURS[0] * 60;
+    const OH_END_MIN = (OH_HOURS[OH_HOURS.length - 1] + 1) * 60;
+    const OH_TOTAL_MIN = OH_END_MIN - OH_START_MIN;
+    const fmtTime = t => { const [h,m] = t.split(":").map(Number); return `${h % 12 || 12}:${pad(m)} ${h >= 12 ? "PM" : "AM"}`; };
+    // Older data stored a bare startHour with no end time — normalize it to
+    // a 1-hour startTime/endTime block so it still renders correctly.
+    const blockTimes = b => b.startTime
+      ? { startTime: b.startTime, endTime: b.endTime || `${pad((+b.startTime.split(":")[0])+1)}:00` }
+      : { startTime: `${pad(b.startHour)}:00`, endTime: `${pad(b.startHour+1)}:00` };
+
+    // Add-block form — placed above the grid so it's immediately visible
+    // with no scrolling, and precise start/end times replace clicking cells.
+    const form = document.createElement("div");
+    form.className = "ohAddForm";
+
+    const dayField = document.createElement("div");
+    dayField.className = "ohField";
+    const dayLbl = document.createElement("label"); dayLbl.textContent = "Day";
+    const daySel = document.createElement("select");
+    OH_DAYS.forEach((d, i) => {
+      const opt = document.createElement("option");
+      opt.value = i; opt.textContent = d;
+      daySel.appendChild(opt);
+    });
+    dayField.appendChild(dayLbl); dayField.appendChild(daySel);
+
+    const startField = document.createElement("div");
+    startField.className = "ohField";
+    const startLbl = document.createElement("label"); startLbl.textContent = "Start";
+    const startInp = document.createElement("input");
+    startInp.type = "time"; startInp.value = "09:00";
+    startField.appendChild(startLbl); startField.appendChild(startInp);
+
+    const endField = document.createElement("div");
+    endField.className = "ohField";
+    const endLbl = document.createElement("label"); endLbl.textContent = "End";
+    const endInp = document.createElement("input");
+    endInp.type = "time"; endInp.value = "10:00";
+    endField.appendChild(endLbl); endField.appendChild(endInp);
+
+    const errMsg = document.createElement("span");
+    errMsg.style.cssText = "color:#E53935;font-size:0.76rem;align-self:center;";
+
+    const addBtn = document.createElement("button");
+    addBtn.className = "smallBtn primary";
+    addBtn.textContent = "Add block";
+    addBtn.addEventListener("click", () => {
+      const day = Number(daySel.value);
+      const startTime = startInp.value, endTime = endInp.value;
+      if (!startTime || !endTime || endTime <= startTime){
+        errMsg.textContent = "End time must be after start time.";
+        return;
+      }
+      officeHours[k].push({ id: genId("oh"), day, startTime, endTime });
+      saveOfficeHours();
+      errMsg.textContent = "";
+      renderOfficeSection();
+    });
+
+    form.appendChild(dayField);
+    form.appendChild(startField);
+    form.appendChild(endField);
+    form.appendChild(addBtn);
+    form.appendChild(errMsg);
+    content.appendChild(form);
+
+    // Read-only weekly grid — blocks are added/removed via the form above
+    const grid = document.createElement("div");
+    grid.className = "ohWeek";
+
+    const hdrRow = document.createElement("div");
+    hdrRow.className = "ohHeaderRow";
+    const hdrGutter = document.createElement("div");
+    hdrGutter.className = "ohHeaderGutter";
+    hdrRow.appendChild(hdrGutter);
+    OH_DAYS.forEach(d => {
+      const hdr = document.createElement("div");
+      hdr.className = "ohDayHdr";
+      hdr.textContent = d;
+      hdrRow.appendChild(hdr);
+    });
+    grid.appendChild(hdrRow);
+
+    const body = document.createElement("div");
+    body.className = "ohBody";
+
+    const bodyGutter = document.createElement("div");
+    bodyGutter.className = "ohBodyGutter";
+    OH_HOURS.forEach(h => {
+      const lbl = document.createElement("div");
+      lbl.className = "ohHourLabel";
+      lbl.style.top = (((h * 60 - OH_START_MIN) / OH_TOTAL_MIN) * 100) + "%";
+      lbl.textContent = formatHour(h);
+      bodyGutter.appendChild(lbl);
+    });
+    body.appendChild(bodyGutter);
+
+    OH_DAYS.forEach((dname, di) => {
+      const col = document.createElement("div");
+      col.className = "ohDayCol";
+      OH_HOURS.forEach(h => {
+        const line = document.createElement("div");
+        line.className = "ohHourLine";
+        line.style.top = (((h * 60 - OH_START_MIN) / OH_TOTAL_MIN) * 100) + "%";
+        col.appendChild(line);
+      });
+      (officeHours[k] || []).filter(b => b.day === di).forEach(b => {
+        const { startTime, endTime } = blockTimes(b);
+        const [sh, sm] = startTime.split(":").map(Number);
+        const [eh, em] = endTime.split(":").map(Number);
+        const startMin = sh * 60 + sm;
+        const endMin = Math.max(eh * 60 + em, startMin + 15);
+        const block = document.createElement("div");
+        block.className = "ohBlock";
+        block.style.top = (((startMin - OH_START_MIN) / OH_TOTAL_MIN) * 100) + "%";
+        block.style.height = (((endMin - startMin) / OH_TOTAL_MIN) * 100) + "%";
+        block.style.background = courseColor(k);
+        block.style.color = textColorForCourses([k]);
+        block.textContent = `Office Hrs · ${fmtTime(startTime)}–${fmtTime(endTime)}`;
+        const del = document.createElement("button");
+        del.className = "ohBlockDel";
+        del.textContent = "×";
+        del.title = "Remove block";
+        del.addEventListener("click", (e) => {
+          e.stopPropagation();
+          officeHours[k] = officeHours[k].filter(x => x.id !== b.id);
+          saveOfficeHours();
+          renderOfficeSection();
+        });
+        block.appendChild(del);
+        col.appendChild(block);
+      });
+      body.appendChild(col);
+    });
+    grid.appendChild(body);
+    content.appendChild(grid);
+  }
+}
+
+/* ============ SECTION SWITCHING ============ */
+let selectedCourseColor = "#5b8def";
+
+/* ============ CANVAS COLOR PICKER ============ */
+/* A reusable HSV picker (spectrum + hue slider + hex input + quick swatches).
+   Both the "Add a course" picker and the Settings "Background color" picker
+   are instances of this — same component, same interaction, different ids
+   and a different onChange target. */
+const CP_SWATCHES = [
+  "#EF4444","#F97316","#EAB308","#22C55E","#14B8A6",
+  "#3B82F6","#8B5CF6","#EC4899","#F43F5E","#10B981",
+  "#F59E0B","#6366F1","#0EA5E9","#84CC16","#A855F7","#FFFFFF"
+];
+
+function hsvToRgb(h,s,v){
+  let r,g,b;
+  const i = Math.floor(h/60)%6, f = h/60-Math.floor(h/60);
+  const p=v*(1-s), q=v*(1-f*s), t=v*(1-(1-f)*s);
+  switch(i){ case 0:r=v;g=t;b=p;break; case 1:r=q;g=v;b=p;break;
+    case 2:r=p;g=v;b=t;break; case 3:r=p;g=q;b=v;break;
+    case 4:r=t;g=p;b=v;break; default:r=v;g=p;b=q; }
+  return [Math.round(r*255),Math.round(g*255),Math.round(b*255)];
+}
+function rgbToHex(r,g,b){ return "#"+[r,g,b].map(x=>x.toString(16).padStart(2,"0")).join(""); }
+function hexToRgbArr(hex){
+  const h = hex.replace("#","");
+  return [parseInt(h.slice(0,2),16),parseInt(h.slice(2,4),16),parseInt(h.slice(4,6),16)];
+}
+function rgbToHsv(r,g,b){
+  r/=255;g/=255;b/=255;
+  const max=Math.max(r,g,b),min=Math.min(r,g,b),d=max-min;
+  let h=0,s=max===0?0:d/max,v=max;
+  if(d!==0){ if(max===r)h=((g-b)/d)%6; else if(max===g)h=(b-r)/d+2; else h=(r-g)/d+4; h*=60; if(h<0)h+=360; }
+  return [h,s,v];
+}
+
+function createColorPicker(ids, onChange){
+  const ps = { hue: 210, s: 0.62, v: 0.94, hex: "#5b8def", draggingSpectrum: false, draggingHue: false };
+  const el = id => document.getElementById(id);
+
+  function drawSpectrum(){
+    const canvas = el(ids.spec);
+    if(!canvas) return;
+    const ctx = canvas.getContext("2d");
+    const W = canvas.width, H = canvas.height;
+    const hGrad = ctx.createLinearGradient(0,0,W,0);
+    hGrad.addColorStop(0,"#fff");
+    const [hr,hg,hb] = hsvToRgb(ps.hue,1,1);
+    hGrad.addColorStop(1,`rgb(${hr},${hg},${hb})`);
+    ctx.fillStyle = hGrad;
+    ctx.fillRect(0,0,W,H);
+    const vGrad = ctx.createLinearGradient(0,0,0,H);
+    vGrad.addColorStop(0,"rgba(0,0,0,0)");
+    vGrad.addColorStop(1,"rgba(0,0,0,1)");
+    ctx.fillStyle = vGrad;
+    ctx.fillRect(0,0,W,H);
+    const cx = ps.s*W, cy = (1-ps.v)*H;
+    ctx.beginPath(); ctx.arc(cx,cy,7,0,Math.PI*2);
+    ctx.strokeStyle="#fff"; ctx.lineWidth=2; ctx.stroke();
+    ctx.beginPath(); ctx.arc(cx,cy,5,0,Math.PI*2);
+    ctx.strokeStyle="rgba(0,0,0,0.4)"; ctx.lineWidth=1; ctx.stroke();
+  }
+  function drawHue(){
+    const canvas = el(ids.hue);
+    if(!canvas) return;
+    const ctx = canvas.getContext("2d");
+    const W = canvas.width, H = canvas.height;
+    const grad = ctx.createLinearGradient(0,0,W,0);
+    for(let i=0;i<=360;i+=30){ const [r,g,b]=hsvToRgb(i,1,1); grad.addColorStop(i/360,`rgb(${r},${g},${b})`); }
+    ctx.fillStyle = grad;
+    ctx.fillRect(0,0,W,H);
+    const tx = (ps.hue/360)*W;
+    ctx.beginPath(); ctx.arc(tx,H/2,H/2-1,0,Math.PI*2);
+    ctx.fillStyle="#fff"; ctx.fill();
+    ctx.strokeStyle="rgba(0,0,0,0.3)"; ctx.lineWidth=1; ctx.stroke();
+  }
+  function update(fire){
+    const [r,g,b] = hsvToRgb(ps.hue,ps.s,ps.v);
+    ps.hex = rgbToHex(r,g,b);
+    const hexVal = ps.hex.replace("#","");
+    const hexInp = el(ids.hex);
+    if(hexInp && document.activeElement !== hexInp) hexInp.value = hexVal;
+    const prev = el(ids.preview);
+    if(prev) prev.style.background = ps.hex;
+    if(ids.swatchWrap){
+      const wrap = el(ids.swatchWrap);
+      if(wrap) wrap.querySelectorAll(".quickSwatch").forEach(sw => {
+        sw.classList.toggle("selected", sw.dataset.hex === ps.hex);
+      });
+    }
+    drawSpectrum();
+    drawHue();
+    // fire defaults to true for real user interaction (drag/type/click);
+    // pass false when just syncing the picker's display to an existing
+    // value (e.g. opening the modal) so that alone doesn't apply a color.
+    if (fire !== false && onChange) onChange(ps.hex);
+  }
+  function setHex(hex, fire){
+    const [r,g,b] = hexToRgbArr(hex);
+    [ps.hue, ps.s, ps.v] = rgbToHsv(r,g,b);
+    update(fire);
+  }
+  function handleSpectrum(e){
+    e.preventDefault && e.preventDefault();
+    const canvas = el(ids.spec);
+    const r = canvas.getBoundingClientRect();
+    const src = e.touches ? e.touches[0] : e;
+    ps.s = Math.max(0,Math.min(1,(src.clientX - r.left)/r.width));
+    ps.v = Math.max(0,Math.min(1,1-(src.clientY - r.top)/r.height));
+    update();
+  }
+  function handleHue(e){
+    e.preventDefault && e.preventDefault();
+    const canvas = el(ids.hue);
+    const r = canvas.getBoundingClientRect();
+    const src = e.touches ? e.touches[0] : e;
+    ps.hue = Math.max(0,Math.min(360,((src.clientX - r.left)/r.width)*360));
+    update();
+  }
+  // Document-level drag listeners are attached once per picker instance
+  // (not per initCanvas call) — initCanvas runs every time its modal opens,
+  // and re-adding these each time would accumulate duplicate listeners
+  // forever since they're never removed.
+  document.addEventListener("mousemove", e => {
+    if(ps.draggingSpectrum) handleSpectrum(e);
+    if(ps.draggingHue) handleHue(e);
+  });
+  document.addEventListener("mouseup", () => { ps.draggingSpectrum=false; ps.draggingHue=false; });
+  document.addEventListener("touchmove", e => {
+    if(ps.draggingSpectrum) handleSpectrum(e);
+    if(ps.draggingHue) handleHue(e);
+  }, {passive:false});
+  document.addEventListener("touchend", () => { ps.draggingSpectrum=false; ps.draggingHue=false; });
+
+  function initCanvas(){
+    const specCanvas = el(ids.spec);
+    const hueCanvas = el(ids.hue);
+    if(!specCanvas || !hueCanvas) return;
+    const sr = specCanvas.getBoundingClientRect();
+    const hr = hueCanvas.getBoundingClientRect();
+    if(sr.width > 0){ specCanvas.width = Math.round(sr.width); specCanvas.height = Math.round(sr.height); }
+    if(hr.width > 0){ hueCanvas.width = Math.round(hr.width); hueCanvas.height = Math.round(hr.height); }
+
+    specCanvas.onmousedown = specCanvas.ontouchstart = function(e){ ps.draggingSpectrum = true; handleSpectrum(e); };
+    hueCanvas.onmousedown = hueCanvas.ontouchstart = function(e){ ps.draggingHue = true; handleHue(e); };
+
+    const hexInp = el(ids.hex);
+    if(hexInp) hexInp.oninput = () => {
+      const v = hexInp.value.replace("#","");
+      if(v.length === 6 && /^[0-9a-fA-F]+$/.test(v)) setHex("#" + v);
+    };
+
+    if(ids.swatchWrap){
+      const swatchWrap = el(ids.swatchWrap);
+      if(swatchWrap){
+        swatchWrap.innerHTML = "";
+        CP_SWATCHES.forEach(hex => {
+          const sw = document.createElement("div");
+          sw.className = "quickSwatch";
+          sw.style.background = hex;
+          sw.dataset.hex = hex;
+          if(hex === "#FFFFFF") sw.style.border = "2px solid var(--border)";
+          sw.addEventListener("click", () => setHex(hex));
+          swatchWrap.appendChild(sw);
+        });
+      }
+    }
+
+    update(false); // just paints the canvas at its current value — no onChange
+  }
+
+  return { initCanvas, setHex, getHex: () => ps.hex };
+}
+
+const coursePicker = createColorPicker(
+  { spec: "colorSpectrumCanvas", hue: "hueSliderCanvas", hex: "colorHexInput", preview: "colorPickerPreview", swatchWrap: "quickSwatches" },
+  hex => { selectedCourseColor = hex; }
+);
+const bgPicker = createColorPicker(
+  { spec: "bgColorSpectrumCanvas", hue: "bgHueSliderCanvas", hex: "bgColorHexInput", preview: "bgColorPickerPreview", swatchWrap: "bgQuickSwatches" },
+  hex => { setCustomBackground(hex); }
+);
+
+function setSection(sec){
+  state.section = sec;
+  document.querySelectorAll(".sectionTab").forEach(t => t.classList.toggle("active", t.dataset.section === sec));
+  // Calendar's Day/Week/Month toggle only shows inside the calendar section
+  document.getElementById("viewToggle").classList.toggle("viewToggle-hidden", sec !== "calendar");
+  // Show/hide calendar views — only show the right one, only when in calendar
+  ["dayView","weekView","monthView"].forEach(id => {
+    const el = document.getElementById(id);
+    if (!el) return;
+    const viewName = id.replace("View","");
+    el.classList.toggle("hidden", sec !== "calendar" || viewName !== state.view);
+  });
+  // Show/hide section views
+  [["syllabus","syllabusView"],["office","officeView"]].forEach(([s,id]) => {
+    const el = document.getElementById(id);
+    if (el) el.classList.toggle("hidden", sec !== s);
+  });
+  if (sec === "syllabus") renderSyllabusSection();
+  if (sec === "office")   renderOfficeSection();
+}
+
+document.querySelectorAll(".sectionTab").forEach(tab => {
+  tab.addEventListener("click", () => setSection(tab.dataset.section));
+});
+
+/* ============ MANAGE COURSES MODAL ============ */
+function renderManageCoursesList(){
+  const wrap = document.getElementById("manageCoursesList");
+  if (!wrap) return;
+  wrap.innerHTML = "";
+  const keys = Object.keys(COURSES);
+  if (!keys.length){
+    wrap.innerHTML = '<p class="emptyCourseListHint">No courses yet — add one below.</p>';
+    return;
+  }
+  keys.forEach(key => {
+    const c = COURSES[key];
+    const row = document.createElement("div");
+    row.className = "courseListRow";
+    const dot = document.createElement("span");
+    dot.className = "swatchDot";
+    dot.style.background = courseColor(key);
+    const name = document.createElement("span");
+    name.className = "name";
+    name.textContent = c.name;
+    const del = document.createElement("button");
+    del.className = "delBtn";
+    del.textContent = "×";
+    del.title = "Remove course";
+    del.addEventListener("click", () => { deleteCourse(key); renderManageCoursesList(); });
+    row.appendChild(dot);
+    row.appendChild(name);
+    row.appendChild(del);
+    wrap.appendChild(row);
+  });
+}
+function openCreateCourse(){
+  document.getElementById("newCourseName").value = "";
+  document.getElementById("createCourseModal").classList.remove("hidden");
+  document.getElementById("scrim").classList.remove("hidden");
+  renderManageCoursesList();
+  // Init canvas picker on next frame (elements need to be visible for getBoundingClientRect)
+  requestAnimationFrame(() => {
+    coursePicker.initCanvas();
+    coursePicker.setHex("#5b8def");
+  });
+  document.getElementById("newCourseName").focus();
+}
+function closeCreateCourse(){
+  document.getElementById("createCourseModal").classList.add("hidden");
+  document.getElementById("scrim").classList.add("hidden");
+}
+document.getElementById("manageCoursesBtn").addEventListener("click", openCreateCourse);
+document.getElementById("closeCreateCourse").addEventListener("click", closeCreateCourse);
+document.getElementById("confirmCreateCourse").addEventListener("click", () => {
+  const name = document.getElementById("newCourseName").value.trim();
+  if (!name) { document.getElementById("newCourseName").focus(); return; }
+  addCourse(name, selectedCourseColor);
+  document.getElementById("newCourseName").value = "";
+  renderManageCoursesList();
+});
+document.getElementById("newCourseName").addEventListener("keydown", (e) => {
+  if (e.key === "Enter") document.getElementById("confirmCreateCourse").click();
+});
+
+/* ============ TOAST ============ */
+function showToast(message, color){
+  const mainEl = document.getElementById("mainArea");
+  const old = mainEl ? mainEl.querySelector(".toast") : document.querySelector(".toast");
+  if (old) old.remove();
+
+  const t = document.createElement("div");
+  t.className = "toast";
+  const dot = document.createElement("div");
+  dot.className = "toastDot";
+  if (color) dot.style.background = color;
+  t.appendChild(dot);
+  t.appendChild(document.createTextNode(message));
+  (mainEl || document.body).appendChild(t);
+
+  setTimeout(() => {
+    t.classList.add("hiding");
+    setTimeout(() => { if (t.parentNode) t.remove(); }, 350);
+  }, 2600);
+}
+
+document.getElementById("eventForm").addEventListener("submit", (e) => {
+  e.preventDefault();
+  const date = document.getElementById("evDate").value;
+  const title = document.getElementById("evTitle").value.trim();
+  const course = document.getElementById("evCourse").value; // may be "none"
+  const type = "event";
+  const detail = document.getElementById("evDetail").value.trim();
+  const startTime = document.getElementById("evStart").value || null;
+  const endTime = document.getElementById("evEnd").value || null;
+  const isRecurring = document.getElementById("evRecurring").checked;
+  const recurFreq = document.getElementById("evRecurFreq").value;
+  const recurEnd = document.getElementById("evRecurEnd").value;
+  if (!date || !title) return;
+
+  const resolvedCourse = course === "none" ? "none" : course;
+  // Each "— None —" event (or recurring series) gets its own independently
+  // random main color, assigned once here rather than sharing one fixed color.
+  const noneColor = resolvedCourse === "none" ? randomMainColor() : null;
+  const color = resolvedCourse === "none" ? noneColor : courseColor(resolvedCourse);
+
+  if (isRecurring && recurEnd && recurEnd >= date){
+    // Generate all recurring instances
+    const dates = generateRecurringDates(date, recurFreq, recurEnd);
+    const recurId = genId("recur");
+    dates.forEach(d => {
+      state.customEvents.push({ id: genId("custom"), course: resolvedCourse, date: d,
+        type, title, detail, startTime, endTime, custom: true, recurId, color: noneColor || undefined });
+    });
+    showToast(`"${title}" added — ${dates.length} occurrences`, color);
+  } else {
+    state.customEvents.push({ id: genId("custom"), course: resolvedCourse, date, type,
+      title, detail, startTime, endTime, custom: true, color: noneColor || undefined });
+    showToast(`"${title}" added`, color);
+  }
+
+  saveCustomEvents();
+  rebuildAll();
+  renderCurrentView();
+
+  document.getElementById("evTitle").value = "";
+  document.getElementById("evDetail").value = "";
+  document.getElementById("evStart").value = "";
+  document.getElementById("evEnd").value = "";
+  document.getElementById("evRecurring").checked = false;
+  document.getElementById("recurringOptions").style.display = "none";
+  document.getElementById("evRecurEnd").value = "";
+});
+
+/* ============ WHEEL NAVIGATION ============ */
+(function(){
+  const mainEl = document.getElementById("mainArea");
+  let accumX = 0, accumY = 0;
+  let lastEventTime = 0;
+  let cooldownUntil = 0;
+  // Fires the moment accumulated movement crosses a threshold — NOT after
+  // waiting for the gesture to go quiet. A debounce-on-silence approach was
+  // tried here first, but a touchpad's inertia tail can keep dribbling tiny
+  // wheel events for a while, continually resetting that timer so it might
+  // not fire until something unrelated (e.g. a mousemove) nudges the event
+  // loop. Acting eagerly, then cooling down for the rest of that gesture's
+  // momentum, avoids depending on a timer ever going quiet at all.
+  // A horizontal two-finger swipe reports through deltaX, not deltaY — a
+  // vertical-only check would miss it — so both axes are tracked and
+  // whichever moved further decides the direction.
+  const GESTURE_RESET_GAP_MS = 300; // idle this long => treat next event as a new gesture
+  const TRIGGER_THRESHOLD = 50;     // cumulative px needed before acting
+  const COOLDOWN_MS = 550;          // suppresses the rest of that gesture's momentum
+
+  function navigate(down){
+    if (state.view === "day"){
+      const nk = addDays(state.currentDate, down ? 1 : -1);
+      if (!dayInBounds(nk)) return;
+      slideNavigate(down ? 1 : -1, () => { state.currentDate = nk; }, renderDay);
+    } else if (state.view === "week"){
+      const nk = addWeeks(state.weekStartKey, down ? 1 : -1);
+      if (!weekInBounds(nk)) return;
+      slideNavigate(down ? 1 : -1, () => { state.weekStartKey = nk; }, renderWeek);
+    } else {
+      const nk = addMonths(state.monthKey, down ? 1 : -1);
+      if (!monthInBounds(nk)) return;
+      slideNavigate(down ? 1 : -1, () => { state.monthKey = nk; }, renderMonth);
+    }
+  }
+
+  mainEl.addEventListener("wheel", (e) => {
+    // Only trigger on the grid area, not when scrolling a time-grid or day list
+    const target = e.target;
+    // Allow natural scroll inside tgScroll (time grid) and dayEvList
+    if (target.closest(".tgScroll") || target.closest(".dayEvList")) return;
+
+    // Prevent page/grid scroll for the whole gesture, not just the event
+    // that ends up triggering navigation.
+    e.preventDefault();
+
+    const now = performance.now();
+    if (now < cooldownUntil) return; // still suppressing this gesture's tail
+
+    if (now - lastEventTime > GESTURE_RESET_GAP_MS){
+      accumX = 0; accumY = 0;
+    }
+    lastEventTime = now;
+
+    accumX += e.deltaX;
+    accumY += e.deltaY;
+
+    const dominant = Math.abs(accumX) >= Math.abs(accumY) ? accumX : accumY;
+    if (Math.abs(dominant) >= TRIGGER_THRESHOLD){
+      navigate(dominant > 0);
+      accumX = 0; accumY = 0;
+      cooldownUntil = now + COOLDOWN_MS;
+    }
+  }, { passive: false });
+})();
+
+/* ============ SETTINGS MODAL ============ */
+function renderSettingsColorRows(){
+  const wrap = document.getElementById("colorRows");
+  if (!wrap) return;
+  wrap.innerHTML = "";
+  const keys = Object.keys(COURSES);
+  if (!keys.length){
+    wrap.innerHTML = '<p style="color:var(--ink-faint);font-size:0.82rem;">No courses yet. Add one first.</p>';
+    return;
+  }
+  keys.forEach(key => {
+    const c = COURSES[key];
+    const row = document.createElement("div");
+    row.className = "colorRow";
+    const name = document.createElement("span");
+    name.className = "name";
+    name.textContent = c.name;
+    const input = document.createElement("input");
+    input.type = "color";
+    input.value = courseColor(key);
+    input.addEventListener("input", () => {
+      state.courseColors[key] = input.value;
+      if (COURSES[key]) COURSES[key].color = input.value;
+      courseColorsTouched.add(key);
+      saveCourses();
+      renderCurrentView();
+    });
+    // Delete course button
+    const del = document.createElement("button");
+    del.className = "delBtn";
+    del.textContent = "×";
+    del.title = "Remove course";
+    del.addEventListener("click", () => { deleteCourse(key); });
+    row.appendChild(name);
+    row.appendChild(input);
+    row.appendChild(del);
+    wrap.appendChild(row);
+  });
+}
+function renderColorRows(){ renderSettingsColorRows(); }
+
+/* ============ THEME ============ */
+// --bg-ink* (not --ink*) tracks the ACTUAL background's brightness — same
+// luminance-threshold technique already used for event/course badge text
+// elsewhere in this file (see textColorForColors). It's a SEPARATE variable
+// from --ink on purpose: --ink is used everywhere, including on the fixed
+// --surface color that cards/rows/modals/buttons render on, and --surface
+// never changes with a custom background. Making --ink itself track --bg's
+// brightness broke all of that surface-sitting text (e.g. white text on a
+// light-mode card once a dark custom background flipped --ink to white —
+// "white on white"). --bg-ink is applied only to the handful of elements
+// that render directly on raw --bg (page titles, weekday header, section
+// headers) — see the CSS rules using var(--bg-ink...).
+function applyTextContrast(){
+  const bg = getComputedStyle(document.documentElement).getPropertyValue("--bg").trim();
+  if (!bg) return;
+  const root = document.documentElement.style;
+  if (luminance(bg) > 0.45) {
+    root.setProperty("--bg-ink", "#14161A");
+    root.setProperty("--bg-ink-soft", "#55595F");
+    root.setProperty("--bg-ink-faint", "#8A8F97");
+  } else {
+    root.setProperty("--bg-ink", "#F2F3F5");
+    root.setProperty("--bg-ink-soft", "#9BA1AB");
+    root.setProperty("--bg-ink-faint", "#6B7078");
+  }
+}
+function applyTheme(theme){
+  document.documentElement.setAttribute("data-theme", theme === "light" ? "light" : "dark");
+  document.querySelectorAll("#themeToggle .themeSegBtn").forEach(b => {
+    b.classList.toggle("active", b.dataset.theme === theme);
+  });
+  applyTextContrast();
+}
+function setTheme(theme){
+  state.theme = theme === "light" ? "light" : "dark";
+  applyTheme(state.theme);
+  scheduleSave("app-theme", () => state.theme, 200);
+}
+async function loadTheme(){
+  const res = await storageGet("app-theme");
+  state.theme = (res && res.value) ? JSON.parse(res.value) : "dark";
+  applyTheme(state.theme);
+}
+document.querySelectorAll("#themeToggle .themeSegBtn").forEach(btn => {
+  btn.addEventListener("click", () => setTheme(btn.dataset.theme));
+});
+
+/* ============ CUSTOM BACKGROUND ============ */
+function setCustomBackground(hex){
+  state.customBg = hex;
+  document.documentElement.style.setProperty("--bg", hex);
+  applyTextContrast();
+  scheduleSave("app-bg", () => state.customBg, 200);
+}
+function clearCustomBackground(){
+  state.customBg = null;
+  document.documentElement.style.removeProperty("--bg");
+  applyTextContrast();
+  scheduleSave("app-bg", () => state.customBg, 200);
+}
+async function loadCustomBg(){
+  const res = await storageGet("app-bg");
+  const hex = (res && res.value) ? JSON.parse(res.value) : null;
+  if (hex){
+    state.customBg = hex;
+    document.documentElement.style.setProperty("--bg", hex);
+  }
+  applyTextContrast();
+}
+document.getElementById("resetBg").addEventListener("click", () => {
+  clearCustomBackground();
+  const currentBg = getComputedStyle(document.documentElement).getPropertyValue("--bg").trim();
+  bgPicker.setHex(currentBg, false);
+});
+
+function openSettings(){
+  renderColorRows();
+  document.getElementById("settingsModal").classList.remove("hidden");
+  document.getElementById("scrim").classList.remove("hidden");
+  // Read the current background BEFORE touching the picker at all — the
+  // picker's own paint would otherwise overwrite --bg first.
+  const currentBg = state.customBg || getComputedStyle(document.documentElement).getPropertyValue("--bg").trim();
+  requestAnimationFrame(() => {
+    bgPicker.initCanvas();
+    bgPicker.setHex(currentBg, false);
+  });
+}
+function closeSettings(){
+  document.getElementById("settingsModal").classList.add("hidden");
+  document.getElementById("scrim").classList.add("hidden");
+}
+document.getElementById("settingsBtn").addEventListener("click", openSettings);
+document.getElementById("closeSettings").addEventListener("click", closeSettings);
+document.getElementById("scrim").addEventListener("click", () => {
+  closeSettings();
+  closeCreateCourse();
+});
+window.addEventListener("keydown", (e) => {
+  if (e.key === "Escape"){ closeSettings(); closeCreateCourse(); }
+});
+/* ============ INIT ============ */
+(function init(){
+  document.getElementById("evDate").value = todayKey();
+  renderCourseSelect();
+  rebuildAll();
+  // Ensure calendar section is active and month view is visible on load
+  state.section = "calendar";
+  state.view = "month";
+  document.querySelectorAll(".sectionTab").forEach(t => t.classList.toggle("active", t.dataset.section === "calendar"));
+  document.getElementById("viewToggle").classList.remove("viewToggle-hidden");
+  document.querySelectorAll(".segBtn").forEach(b => b.classList.toggle("active", b.dataset.view === "month"));
+  document.getElementById("dayView").classList.add("hidden");
+  document.getElementById("weekView").classList.add("hidden");
+  document.getElementById("monthView").classList.remove("hidden");
+  document.getElementById("syllabusView").classList.add("hidden");
+  document.getElementById("officeView").classList.add("hidden");
+  renderMonth();
+  loadCompleted();
+  loadCustomEvents();
+  loadNotes();
+  loadCourses();
+  loadSyllabusTopics();
+  loadOfficeHours();
+  loadTheme();
+  loadCustomBg();
+})();
+
+
+</script>
+</body>
+</html>
