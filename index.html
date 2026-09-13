@@ -1651,6 +1651,8 @@ function addCourse(name, color){
   rebuildAll();
   renderCourseSelect();
   renderCurrentView();
+  renderSyllabusSection();
+  renderOfficeSection();
   renderSettingsColorRows();
   showToast(`"${name}" added`, color);
 }
@@ -1659,10 +1661,14 @@ function deleteCourse(key){
   delete COURSES[key];
   delete state.courseColors[key];
   state.filters.delete(key);
+  if (syllabusState.courseKey === key) syllabusState.courseKey = null;
+  if (officeState.courseKey === key) officeState.courseKey = null;
   saveCourses();
   rebuildAll();
   renderCourseSelect();
   renderCurrentView();
+  renderSyllabusSection();
+  renderOfficeSection();
   renderSettingsColorRows();
 }
 
@@ -2462,6 +2468,10 @@ async function loadSyllabusTopics(){
 function saveSyllabusTopics(){ scheduleSave("syllabus-topics", () => syllabusTopics, 300); }
 
 function renderSyllabusSection(){
+  // If the course being viewed was just deleted (e.g. from another tab's
+  // Manage Courses modal), fall back to the course picker instead of
+  // rendering a detail view for a course that no longer exists.
+  if (syllabusState.courseKey && !COURSES[syllabusState.courseKey]) syllabusState.courseKey = null;
   const content = document.getElementById("syllabusContent");
   const titleEl = document.getElementById("syllabusTitle");
   const subtitleEl = document.getElementById("syllabusSubtitle");
@@ -2585,6 +2595,10 @@ const OH_DAYS = ["Mon","Tue","Wed","Thu","Fri"];
 const OH_HOURS = [7,8,9,10,11,12,13,14,15,16,17,18,19,20,21,22,23]; // 7 AM–12 AM
 
 function renderOfficeSection(){
+  // If the course being viewed was just deleted (e.g. from another tab's
+  // Manage Courses modal), fall back to the course picker instead of
+  // rendering a detail view for a course that no longer exists.
+  if (officeState.courseKey && !COURSES[officeState.courseKey]) officeState.courseKey = null;
   const content = document.getElementById("officeContent");
   // Reset to plain block flow for the course-picker grid (which scrolls
   // with the rest of the section like Syllabus does); the detail view
