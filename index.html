@@ -1343,32 +1343,32 @@
       </div>
     </div>
     <div class="modalSection">
-      <h4>Hide from calendar</h4>
+      <h4>Toggle view</h4>
       <div class="typeToggleRow">
         <span>Lectures / classes</span>
         <label class="toggleSwitch">
-          <input type="checkbox" class="typeVisToggle" data-type="class">
+          <input type="checkbox" class="typeVisToggle" data-type="class" checked>
           <span class="toggleSlider"></span>
         </label>
       </div>
       <div class="typeToggleRow">
         <span>Assignments due</span>
         <label class="toggleSwitch">
-          <input type="checkbox" class="typeVisToggle" data-type="due">
+          <input type="checkbox" class="typeVisToggle" data-type="due" checked>
           <span class="toggleSlider"></span>
         </label>
       </div>
       <div class="typeToggleRow">
         <span>Exams</span>
         <label class="toggleSwitch">
-          <input type="checkbox" class="typeVisToggle" data-type="exam">
+          <input type="checkbox" class="typeVisToggle" data-type="exam" checked>
           <span class="toggleSlider"></span>
         </label>
       </div>
       <div class="typeToggleRow">
         <span>Other events</span>
         <label class="toggleSwitch">
-          <input type="checkbox" class="typeVisToggle" data-type="event">
+          <input type="checkbox" class="typeVisToggle" data-type="event" checked>
           <span class="toggleSlider"></span>
         </label>
       </div>
@@ -1410,7 +1410,7 @@ const state = {
   view: "month",
   section: "calendar",   // "calendar" | "syllabus" | "clubs" | "office"
   filters: new Set(["none"]),
-  hiddenTypes: new Set(),
+  visibleTypes: new Set(["class", "due", "exam", "event"]),
   completed: {},
   customEvents: [],
   notes: [],
@@ -1438,7 +1438,7 @@ function parseKey(s){ const [y,m,d] = s.split("-").map(Number); return new Date(
 function addDays(k, n){ const d = parseKey(k); d.setDate(d.getDate()+n); return keyOf(d.getFullYear(), d.getMonth(), d.getDate()); }
 function todayKey(){ const t = new Date(); return keyOf(t.getFullYear(), t.getMonth(), t.getDate()); }
 function genId(prefix){ return prefix + "-" + Date.now().toString(36) + Math.random().toString(36).slice(2,7); }
-function visible(ev){ return state.filters.has(ev.course) && !state.hiddenTypes.has(ev.type || "event"); }
+function visible(ev){ return state.filters.has(ev.course) && state.visibleTypes.has(ev.type || "event"); }
 /* Bright, unambiguous "main" colors only — no brown/black/gray/teal/etc. */
 const MAIN_COLOR_POOL = ["#E53935","#FB8C00","#FDD835","#43A047","#1E88E5","#8E24AA","#D81B60"];
 function randomMainColor(){
@@ -1626,26 +1626,36 @@ async function loadCompleted(){
 }
 function saveCompleted(){ scheduleSave("completed-events", () => state.completed, 250); }
 
-async function loadHiddenTypes(){
-  const res = await storageGet("hidden-types");
+const ALL_EVENT_TYPES = ["class", "due", "exam", "event"];
+async function loadVisibleTypes(){
+  const res = await storageGet("visible-types");
   if (res && res.value){
-    state.hiddenTypes = new Set(JSON.parse(res.value));
-    syncTypeVisibilityToggles();
+    state.visibleTypes = new Set(JSON.parse(res.value));
+  } else {
+    // Migrate anyone who had the old "hide from calendar" toggles set —
+    // that stored which types were hidden, this stores which are shown.
+    const oldRes = await storageGet("hidden-types");
+    if (oldRes && oldRes.value){
+      const hidden = new Set(JSON.parse(oldRes.value));
+      state.visibleTypes = new Set(ALL_EVENT_TYPES.filter(t => !hidden.has(t)));
+      saveVisibleTypes();
+    }
   }
+  syncTypeVisibilityToggles();
   rebuildAll();
   renderCurrentView();
 }
-function saveHiddenTypes(){ scheduleSave("hidden-types", () => [...state.hiddenTypes], 250); }
+function saveVisibleTypes(){ scheduleSave("visible-types", () => [...state.visibleTypes], 250); }
 function syncTypeVisibilityToggles(){
   document.querySelectorAll(".typeVisToggle").forEach(cb => {
-    cb.checked = state.hiddenTypes.has(cb.dataset.type);
+    cb.checked = state.visibleTypes.has(cb.dataset.type);
   });
 }
 document.querySelectorAll(".typeVisToggle").forEach(cb => {
   cb.addEventListener("change", () => {
     const t = cb.dataset.type;
-    if (cb.checked) state.hiddenTypes.add(t); else state.hiddenTypes.delete(t);
-    saveHiddenTypes();
+    if (cb.checked) state.visibleTypes.add(t); else state.visibleTypes.delete(t);
+    saveVisibleTypes();
     rebuildAll();
     renderCurrentView();
   });
@@ -3513,7 +3523,7 @@ window.addEventListener("keydown", (e) => {
   document.getElementById("officeView").classList.add("hidden");
   renderMonth();
   loadCompleted();
-  loadHiddenTypes();
+  loadVisibleTypes();
   loadCustomEvents();
   loadNotes();
   loadCourses();
