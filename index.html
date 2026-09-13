@@ -443,7 +443,6 @@
     overflow: hidden;
   }
   .cell:hover { transform: translateY(-2px); box-shadow: var(--shadow-md); }
-  .cell.hasEvents { border-color: transparent; }
   .cell.otherMonth { opacity: 0.4; }
   .cell.cellEmpty {
     background: transparent !important;
@@ -455,7 +454,12 @@
   .cell:hover.isToday { box-shadow: 0 0 0 2px var(--accent) inset, var(--shadow-md); }
   .cell .dnum { font-size: 0.92rem; font-weight: 700; font-variant-numeric: tabular-nums; margin-bottom: 6px; flex-shrink: 0; }
   .cell .cellEvents { display: flex; flex-direction: column; gap: 3px; overflow: hidden; flex: 1; min-height: 0; }
-  .cell .evLine { font-size: 0.68rem; font-weight: 700; line-height: 1.25; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+  /* A small dot per event instead of one big multi-color cell background —
+     each event's color is unambiguous and can't visually distort based on
+     how much text happens to sit on top of it. */
+  .cell .evLine { display: flex; align-items: center; gap: 5px; font-size: 0.68rem; font-weight: 700; line-height: 1.25; min-width: 0; }
+  .cell .evLine .evDot { width: 7px; height: 7px; border-radius: 50%; flex-shrink: 0; }
+  .cell .evLine .evLabel { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
   .cell .more { font-size: 0.65rem; font-weight: 600; opacity: 0.85; }
 
   /* ---------- Today pill ---------- */
@@ -2162,7 +2166,6 @@ function renderDay(){
 function buildCell(d, targetMonth){
   const k = keyOf(d.getFullYear(), d.getMonth(), d.getDate());
   const dayEvents = (dateIndex[k] || []).filter(visible);
-  const cellColors = [...new Set(dayEvents.map(e => eventColor(e)))];
   const tKey = todayKey();
 
   const cell = document.createElement("div");
@@ -2170,7 +2173,15 @@ function buildCell(d, targetMonth){
     + (dayEvents.length ? " hasEvents" : "")
     + (targetMonth !== undefined && d.getMonth() !== targetMonth ? " otherMonth" : "")
     + (k === tKey ? " isToday" : "");
-  if (dayEvents.length) cell.setAttribute("style", splitBackgroundColors(cellColors));
+  // A full-cell multi-color gradient (the old approach) put event-title text
+  // directly on top of it — since that text sits left-aligned and doesn't
+  // cover the cell evenly, the bands it partly obscures read as visually
+  // "thinner" than the untouched ones on the right, even though the actual
+  // gradient stops were mathematically exact equal splits. A small color dot
+  // per event line can't suffer from that illusion, and also fixes a real
+  // mismatch the gradient had: it was built from EVERY event that day, not
+  // just the (up to 3) actually listed, so its color count often didn't
+  // match what you could read.
 
   const num = document.createElement("div");
   num.className = "dnum";
@@ -2183,7 +2194,14 @@ function buildCell(d, targetMonth){
   shown.forEach(ev => {
     const line = document.createElement("div");
     line.className = "evLine";
-    line.textContent = ev.title;
+    const dot = document.createElement("span");
+    dot.className = "evDot";
+    dot.style.background = eventColor(ev);
+    const label = document.createElement("span");
+    label.className = "evLabel";
+    label.textContent = ev.title;
+    line.appendChild(dot);
+    line.appendChild(label);
     evWrap.appendChild(line);
   });
   if (dayEvents.length > 3) {
