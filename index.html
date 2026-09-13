@@ -350,13 +350,13 @@
     font-size: 0.78rem;
     line-height: 1.45;
     word-break: break-word;
-    /* Slight random-ish tilt via nth-child so each note feels unique */
+    /* Each note's own tilt, fixed at creation time — see --rot below,
+       set once per note in JS instead of derived from list position
+       (nth-child), which used to reshuffle every note's color/tilt
+       whenever a note was added or removed. */
+    transform: rotate(var(--rot, -1.2deg));
     transform-origin: center;
   }
-  .noteRow:nth-child(odd)  { transform: rotate(-1.2deg); background: #F9E04B; }
-  .noteRow:nth-child(even) { transform: rotate(0.9deg);  background: #FFC85C; }
-  .noteRow:nth-child(3n)   { transform: rotate(-0.5deg); background: #B5E5A0; }
-  .noteRow:nth-child(4n)   { transform: rotate(1.4deg);  background: #A8D8F0; }
   .noteRow:hover { transform: rotate(0deg) scale(1.03); z-index: 2; box-shadow: 4px 6px 16px rgba(0,0,0,0.45); transition: transform .15s ease, box-shadow .15s ease; }
   /* Folded corner */
   .noteRow::after {
@@ -1779,13 +1779,31 @@ function renderCourseSelect(){
   sel.value = (prev && (prev === "none" || keys.includes(prev))) ? prev : "none";
 }
 
+/* Sticky-note look — colors/tilts picked once per note and stored on it
+   (see renderNotes/noteForm submit), not derived from list position. */
+const NOTE_COLORS = ["#F9E04B", "#FFC85C", "#B5E5A0", "#A8D8F0"];
+const NOTE_ROTATIONS = [-1.2, 0.9, -0.5, 1.4];
+function randomNoteColor(){ return NOTE_COLORS[Math.floor(Math.random() * NOTE_COLORS.length)]; }
+function randomNoteRotation(){ return NOTE_ROTATIONS[Math.floor(Math.random() * NOTE_ROTATIONS.length)]; }
+
 function renderNotes(){
   const list = document.getElementById("notesList");
   list.innerHTML = "";
   if (!state.notes.length) { list.innerHTML = '<li class="emptyHint">No notes yet.</li>'; return; }
+  let needsSave = false;
   state.notes.forEach(n => {
+    // Notes saved before color/rot were per-note (position-based nth-child
+    // styling) won't have these yet — assign once here and persist so they
+    // don't get re-randomized on every render.
+    if (!n.color || n.rot === undefined){
+      n.color = randomNoteColor();
+      n.rot = randomNoteRotation();
+      needsSave = true;
+    }
     const li = document.createElement("li");
     li.className = "noteRow";
+    li.style.background = n.color;
+    li.style.setProperty("--rot", n.rot + "deg");
 
     const span = document.createElement("span");
     span.className = "noteText";
@@ -1805,6 +1823,7 @@ function renderNotes(){
     li.appendChild(del);
     list.appendChild(li);
   });
+  if (needsSave) saveNotes();
 }
 
 /* ============ RENDER: EVENT ROW ============ */
@@ -2559,7 +2578,7 @@ document.getElementById("noteForm").addEventListener("submit", (e) => {
   const input = document.getElementById("noteInput");
   const text = input.value.trim();
   if (!text) return;
-  state.notes.unshift({ id: genId("note"), text });
+  state.notes.unshift({ id: genId("note"), text, color: randomNoteColor(), rot: randomNoteRotation() });
   saveNotes();
   renderNotes();
   input.value = "";
