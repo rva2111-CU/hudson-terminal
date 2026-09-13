@@ -3143,7 +3143,13 @@ function setSection(sec){
 }
 
 document.querySelectorAll(".sectionTab").forEach(tab => {
-  tab.addEventListener("click", () => setSection(tab.dataset.section));
+  tab.addEventListener("click", () => {
+    const sec = tab.dataset.section;
+    setSection(sec);
+    // Clicking Calendar while already on Day/Week is a shortcut back to the
+    // Month grid, rather than a no-op that just leaves you where you were.
+    if (sec === "calendar" && state.view !== "month") setView("month");
+  });
 });
 
 /* ============ MANAGE COURSES MODAL ============ */
@@ -3361,6 +3367,24 @@ document.getElementById("eventForm").addEventListener("submit", (e) => {
       cooldownUntil = now + COOLDOWN_MS;
     }
   }, { passive: false });
+
+  // Left/Right arrow keys step to the previous/next day, week, or month,
+  // matching whichever calendar view is currently active — reuses the same
+  // navigate() the wheel gesture above uses, so the two stay in sync.
+  window.addEventListener("keydown", (e) => {
+    if (e.key !== "ArrowLeft" && e.key !== "ArrowRight") return;
+    if (state.section !== "calendar") return;
+
+    // Don't hijack the arrow keys while the user is typing in a field, or
+    // while a modal (Settings, Manage Courses) is open on top of the grid.
+    const tag = document.activeElement && document.activeElement.tagName;
+    if (tag === "INPUT" || tag === "TEXTAREA" || tag === "SELECT") return;
+    if (!document.getElementById("settingsModal").classList.contains("hidden")) return;
+    if (!document.getElementById("createCourseModal").classList.contains("hidden")) return;
+
+    e.preventDefault();
+    navigate(e.key === "ArrowRight");
+  });
 })();
 
 /* ============ SETTINGS MODAL ============ */
