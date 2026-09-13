@@ -387,6 +387,19 @@
   .delBtn { background: none; border: none; color: var(--ink-faint); cursor: pointer; font-size: 1.05rem; line-height: 1; padding: 0 2px; flex-shrink: 0; }
   .delBtn:hover { color: var(--ink); }
 
+  .courseDeleteBtn {
+    background: none;
+    border: none;
+    color: #E53935;
+    cursor: pointer;
+    font-size: 0.78rem;
+    font-weight: 700;
+    padding: 4px 9px;
+    border-radius: 6px;
+    flex-shrink: 0;
+  }
+  .courseDeleteBtn:hover { background: rgba(229,57,53,0.14); }
+
   /* ---------- View nav ---------- */
   /* view hidden handled above */
   .viewNav { display: flex; align-items: center; gap: 12px; margin-bottom: 10px; flex-shrink: 0; }
@@ -988,12 +1001,12 @@
   /* ---------- Toast notification ---------- */
   #mainArea { position: relative; }
   .toast {
-    position: absolute;
+    position: fixed;
     bottom: 28px;
     left: 50%;
     transform: translateX(-50%) translateY(0);
-    background: var(--ink);
-    color: var(--bg);
+    background: #1C1E23;
+    color: #F2F3F5;
     font-size: 0.88rem;
     font-weight: 650;
     padding: 11px 22px;
@@ -3033,9 +3046,8 @@ function renderManageCoursesList(){
     name.className = "name";
     name.textContent = c.name;
     const del = document.createElement("button");
-    del.className = "delBtn";
-    del.textContent = "×";
-    del.title = "Remove course";
+    del.className = "courseDeleteBtn";
+    del.textContent = "Delete";
     del.addEventListener("click", () => { deleteCourse(key); renderManageCoursesList(); });
     row.appendChild(dot);
     row.appendChild(name);
