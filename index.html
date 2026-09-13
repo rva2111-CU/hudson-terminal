@@ -1938,6 +1938,11 @@ function buildQuickAdd(k, onAdded){
 
 /* Build the shared time-column grid for an array of dateKeys */
 function buildTimeGrid(container, dateKeys, showDayHeader, hideAllDay){
+  // Preserve scroll position across a re-render of the same day/week (e.g.
+  // toggling an event complete) so the grid doesn't jump back to "now" —
+  // that reset should only happen the first time this day/week is shown.
+  const prevScroll = container.querySelector(".tgScroll");
+  const prevScrollTop = prevScroll ? prevScroll.scrollTop : null;
   container.innerHTML = "";
   const tKey = todayKey();
   const totalH = TG_HOUR_PX * 24;
@@ -2075,9 +2080,11 @@ function buildTimeGrid(container, dateKeys, showDayHeader, hideAllDay){
     // Offset by the sticky header's own height, since it now lives inside
     // the scroll container's content (ahead of the grid) rather than
     // outside it — otherwise the initial scroll position would land short.
-    requestAnimationFrame(() => { scroll.scrollTop = Math.max(0, topPx - 120 + (hdrEl ? hdrEl.offsetHeight : 0)); });
+    const target = prevScrollTop !== null ? prevScrollTop : Math.max(0, topPx - 120 + (hdrEl ? hdrEl.offsetHeight : 0));
+    requestAnimationFrame(() => { scroll.scrollTop = target; });
   } else {
-    requestAnimationFrame(() => { scroll.scrollTop = 8 * TG_HOUR_PX - 40 + (hdrEl ? hdrEl.offsetHeight : 0); });
+    const target = prevScrollTop !== null ? prevScrollTop : 8 * TG_HOUR_PX - 40 + (hdrEl ? hdrEl.offsetHeight : 0);
+    requestAnimationFrame(() => { scroll.scrollTop = target; });
   }
 
   /* Day columns — with timed event blocks */
