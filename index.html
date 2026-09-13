@@ -844,12 +844,14 @@
   .ohWeek {
     display: flex;
     flex-direction: column;
+    flex: 1;
+    min-height: 0;
     border: 1px solid var(--border);
     border-radius: var(--radius-md);
     overflow: hidden;
     background: var(--surface);
   }
-  .ohHeaderRow { display: flex; border-bottom: 1px solid var(--border); }
+  .ohHeaderRow { display: flex; border-bottom: 1px solid var(--border); flex-shrink: 0; }
   .ohHeaderGutter { width: 56px; min-width: 56px; flex-shrink: 0; background: var(--surface-2); }
   .ohDayHdr {
     flex: 1;
@@ -859,7 +861,23 @@
     font-size: 0.76rem; font-weight: 700; color: var(--ink-soft);
     border-left: 1px solid var(--border);
   }
-  .ohBody { display: flex; position: relative; height: 420px; }
+  /* The grid's own scroll viewport — sized by the flex layout, NOT by its
+     content (which is a fixed pixel-per-hour height, so it actually can
+     overflow this and scroll). This is the only scrollable element in the
+     Office Hours section; the header row and add-block form above it never
+     move. Mouse wheel and touchpad scrolling both work here for free since
+     it's a plain overflow-y:auto element — no custom JS scroll handling. */
+  .ohScroll {
+    flex: 1;
+    min-height: 0;
+    overflow-y: auto;
+    scrollbar-width: thin;
+    scrollbar-color: var(--border-strong) transparent;
+  }
+  .ohScroll::-webkit-scrollbar { width: 8px; }
+  .ohScroll::-webkit-scrollbar-track { background: transparent; }
+  .ohScroll::-webkit-scrollbar-thumb { background: var(--border-strong); border-radius: 4px; }
+  .ohBody { display: flex; position: relative; }
   .ohBodyGutter { width: 56px; min-width: 56px; flex-shrink: 0; border-right: 1px solid var(--border); position: relative; }
   .ohHourLabel {
     position: absolute; right: 8px; transform: translateY(-50%);
@@ -2547,6 +2565,14 @@ const OH_HOURS = [8,9,10,11,12,13,14,15,16,17,18]; // 8 AM–6 PM
 
 function renderOfficeSection(){
   const content = document.getElementById("officeContent");
+  // Reset to plain block flow for the course-picker grid (which scrolls
+  // with the rest of the section like Syllabus does); the detail view
+  // below opts back into a flex layout so its grid can be the one and
+  // only scrollable part instead.
+  content.style.display = "";
+  content.style.flexDirection = "";
+  content.style.minHeight = "";
+  content.style.overflow = "";
   const titleEl = document.getElementById("officeTitle");
   const subtitleEl = document.getElementById("officeSubtitle");
   let backBtn = document.getElementById("officeBack");
@@ -2589,10 +2615,19 @@ function renderOfficeSection(){
     backBtn.classList.add("visible");
     if (!officeHours[k]) officeHours[k] = [];
     content.innerHTML = "";
+    // Fill the remaining height and hide any overflow at this level — the
+    // grid's own .ohScroll viewport (built below) is the only thing that
+    // should actually scroll; the form above always stays put.
+    content.style.display = "flex";
+    content.style.flexDirection = "column";
+    content.style.minHeight = "0";
+    content.style.overflow = "hidden";
 
+    const OH_HOUR_PX = 60; // fixed px-per-hour, like TG_HOUR_PX for the calendar grid
     const OH_START_MIN = OH_HOURS[0] * 60;
     const OH_END_MIN = (OH_HOURS[OH_HOURS.length - 1] + 1) * 60;
     const OH_TOTAL_MIN = OH_END_MIN - OH_START_MIN;
+    const OH_TOTAL_PX = (OH_TOTAL_MIN / 60) * OH_HOUR_PX;
     const fmtTime = t => { const [h,m] = t.split(":").map(Number); return `${h % 12 || 12}:${pad(m)} ${h >= 12 ? "PM" : "AM"}`; };
     // Older data stored a bare startHour with no end time — normalize it to
     // a 1-hour startTime/endTime block so it still renders correctly.
@@ -2673,15 +2708,19 @@ function renderOfficeSection(){
     });
     grid.appendChild(hdrRow);
 
+    const scroll = document.createElement("div");
+    scroll.className = "ohScroll";
+
     const body = document.createElement("div");
     body.className = "ohBody";
+    body.style.height = OH_TOTAL_PX + "px";
 
     const bodyGutter = document.createElement("div");
     bodyGutter.className = "ohBodyGutter";
     OH_HOURS.forEach(h => {
       const lbl = document.createElement("div");
       lbl.className = "ohHourLabel";
-      lbl.style.top = (((h * 60 - OH_START_MIN) / OH_TOTAL_MIN) * 100) + "%";
+      lbl.style.top = (((h * 60 - OH_START_MIN) / 60) * OH_HOUR_PX) + "px";
       lbl.textContent = formatHour(h);
       bodyGutter.appendChild(lbl);
     });
@@ -2693,7 +2732,7 @@ function renderOfficeSection(){
       OH_HOURS.forEach(h => {
         const line = document.createElement("div");
         line.className = "ohHourLine";
-        line.style.top = (((h * 60 - OH_START_MIN) / OH_TOTAL_MIN) * 100) + "%";
+        line.style.top = (((h * 60 - OH_START_MIN) / 60) * OH_HOUR_PX) + "px";
         col.appendChild(line);
       });
       (officeHours[k] || []).filter(b => b.day === di).forEach(b => {
@@ -2704,8 +2743,8 @@ function renderOfficeSection(){
         const endMin = Math.max(eh * 60 + em, startMin + 15);
         const block = document.createElement("div");
         block.className = "ohBlock";
-        block.style.top = (((startMin - OH_START_MIN) / OH_TOTAL_MIN) * 100) + "%";
-        block.style.height = (((endMin - startMin) / OH_TOTAL_MIN) * 100) + "%";
+        block.style.top = (((startMin - OH_START_MIN) / 60) * OH_HOUR_PX) + "px";
+        block.style.height = Math.max((((endMin - startMin) / 60) * OH_HOUR_PX), 18) + "px";
         block.style.background = courseColor(k);
         block.style.color = textColorForCourses([k]);
         block.textContent = `Office Hrs · ${fmtTime(startTime)}–${fmtTime(endTime)}`;
@@ -2724,7 +2763,8 @@ function renderOfficeSection(){
       });
       body.appendChild(col);
     });
-    grid.appendChild(body);
+    scroll.appendChild(body);
+    grid.appendChild(scroll);
     content.appendChild(grid);
   }
 }
