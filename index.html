@@ -2222,15 +2222,13 @@ function buildTimeGrid(container, dateKeys, showDayHeader, hideAllDay){
       block.style.background = eventColor(ev);
       const textColor = textColorForColors([eventColor(ev)]);
       block.style.color = textColor;
-      // Differentiate due-dates and exams from ordinary class periods —
-      // borrow the same color already picked for text contrast so the
+      // Differentiate exams from ordinary class periods with a bold ring —
+      // borrows the same color already picked for text contrast so the
       // accent reads against any course color instead of needing its own
-      // per-hue contrast logic.
+      // per-hue contrast logic. Due-dates get a clock icon instead of a
+      // border accent (see the label prefix below).
       if (ev.type === "exam"){
         block.style.boxShadow = `inset 0 0 0 2px ${textColor}, 0 1px 4px rgba(0,0,0,0.35)`;
-      } else if (ev.type === "due"){
-        block.style.borderLeft = `4px solid ${textColor}`;
-        block.style.paddingLeft = "9px";
       }
 
       const label = document.createElement("div");
@@ -2239,7 +2237,7 @@ function buildTimeGrid(container, dateKeys, showDayHeader, hideAllDay){
       label.style.overflow = "hidden";
       label.style.textOverflow = "ellipsis";
       label.style.whiteSpace = "nowrap";
-      const prefix = ev.type === "due" ? "Due: " : ev.type === "exam" ? "Exam: " : "";
+      const prefix = ev.type === "due" ? "\u{1F550} Due: " : ev.type === "exam" ? "⚠️ Exam: " : "";
       label.textContent = prefix + ev.title;
       block.appendChild(label);
 
@@ -2324,13 +2322,12 @@ function buildCell(d, targetMonth){
     // periods, and surface the time (if any) — this is the only place a
     // due item's time would otherwise be invisible, since it has no grid
     // block. currentColor picks up whatever ink color the cell already
-    // uses, so the accent always matches the text it outlines.
+    // uses, so the exam ring always matches the text it outlines.
     const timeStr = ev.startTime ? ` – ${formatClock(ev.startTime)}` : "";
     if (ev.type === "due"){
-      line.textContent = `Due: ${ev.title}${timeStr}`;
-      line.style.cssText += "border-left:3px solid currentColor;padding-left:4px;";
+      line.textContent = `\u{1F550} Due: ${ev.title}${timeStr}`;
     } else if (ev.type === "exam"){
-      line.textContent = `Exam: ${ev.title}${timeStr}`;
+      line.textContent = `⚠️ Exam: ${ev.title}${timeStr}`;
       line.style.cssText += "box-shadow:inset 0 0 0 1px currentColor;border-radius:3px;padding:0 3px;";
     } else {
       line.textContent = ev.title;
