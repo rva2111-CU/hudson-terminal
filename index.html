@@ -687,6 +687,8 @@
     min-height: 20px;
   }
   .tgEvent:hover { filter: brightness(1.1); }
+  .tgEvent.done { opacity: 0.5; }
+  .tgEvent.done .tgEventLabel { text-decoration: line-through; }
   /* All-day chip (used inside .tgAllDayCell) */
   .tgChip {
     font-size: 0.69rem;
@@ -2098,7 +2100,7 @@ function buildTimeGrid(container, dateKeys, showDayHeader, hideAllDay){
       const leftPct = col * widthPct;
 
       const block = document.createElement("div");
-      block.className = "tgEvent";
+      block.className = "tgEvent" + (state.completed[ev.id] ? " done" : "");
       block.style.top = topPx + "px";
       block.style.height = heightPx + "px";
       block.style.left = `calc(${leftPct}% + 2px)`;
@@ -2107,6 +2109,7 @@ function buildTimeGrid(container, dateKeys, showDayHeader, hideAllDay){
       block.style.color = textColorForColors([eventColor(ev)]);
 
       const label = document.createElement("div");
+      label.className = "tgEventLabel";
       label.style.fontWeight = "700";
       label.style.overflow = "hidden";
       label.style.textOverflow = "ellipsis";
