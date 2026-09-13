@@ -1174,10 +1174,18 @@
             </select>
           </div>
           <div>
-            <label>Time (optional)</label>
+            <label for="evType">Type</label>
+            <select id="evType">
+              <option value="event">Event</option>
+              <option value="due">Assignment Due</option>
+              <option value="exam">Exam</option>
+            </select>
+          </div>
+          <div>
+            <label id="evTimeLabel">Time (optional)</label>
             <div style="display:flex;gap:8px;align-items:center;">
               <input type="time" id="evStart" style="flex:1;">
-              <span style="color:var(--ink-faint);font-size:0.8rem;flex-shrink:0;">to</span>
+              <span id="evTimeToSep" style="color:var(--ink-faint);font-size:0.8rem;flex-shrink:0;">to</span>
               <input type="time" id="evEnd" style="flex:1;">
             </div>
           </div>
@@ -1767,6 +1775,19 @@ function renderRow(ev){
   }
   body.appendChild(titleLine);
 
+  if (ev.startTime) {
+    const timeLine = document.createElement("div");
+    timeLine.className = "detail";
+    if (ev.type === "due") {
+      timeLine.textContent = `Due at ${formatClock(ev.startTime)}`;
+    } else {
+      timeLine.textContent = ev.endTime
+        ? `${formatClock(ev.startTime)} – ${formatClock(ev.endTime)}`
+        : formatClock(ev.startTime);
+    }
+    body.appendChild(timeLine);
+  }
+
   if (ev.detail) {
     const detail = document.createElement("div");
     detail.className = "detail";
@@ -1797,6 +1818,12 @@ function renderRow(ev){
 const TG_HOUR_PX = 64; // must match --tg-hour CSS var
 const HOURS = Array.from({length: 24}, (_,i) => i);
 
+function formatClock(t){
+  if (!t) return "";
+  const [h, m] = t.split(":").map(Number);
+  const hh = h % 12 || 12;
+  return `${hh}:${String(m).padStart(2,"0")} ${h >= 12 ? "PM" : "AM"}`;
+}
 function formatHour(h){
   if (h === 0) return "12 AM";
   if (h < 12) return `${h} AM`;
@@ -2220,7 +2247,11 @@ function buildCell(d, targetMonth){
   shown.forEach(ev => {
     const line = document.createElement("div");
     line.className = "evLine";
-    line.textContent = ev.title;
+    // Flag due-dates distinctly so they don't blend in with class periods,
+    // and surface the time (if any) — this is the only place a due item's
+    // time would otherwise be invisible, since it has no grid block.
+    const timeStr = ev.startTime ? ` – ${formatClock(ev.startTime)}` : "";
+    line.textContent = ev.type === "due" ? `Due: ${ev.title}${timeStr}` : ev.title;
     evWrap.appendChild(line);
   });
   if (dayEvents.length > 3) {
@@ -3105,15 +3136,29 @@ function showToast(message, color){
   }, 2600);
 }
 
+// Assignment due-dates only need one time (when it's due), not a range —
+// swap the label and hide the "to <end time>" half for that type.
+function toggleEvTimeFields(){
+  const isDue = document.getElementById("evType").value === "due";
+  document.getElementById("evTimeLabel").textContent = isDue ? "Due time (optional)" : "Time (optional)";
+  document.getElementById("evTimeToSep").style.display = isDue ? "none" : "";
+  document.getElementById("evEnd").style.display = isDue ? "none" : "";
+  if (isDue) document.getElementById("evEnd").value = "";
+}
+document.getElementById("evType").addEventListener("change", toggleEvTimeFields);
+
 document.getElementById("eventForm").addEventListener("submit", (e) => {
   e.preventDefault();
   const date = document.getElementById("evDate").value;
   const title = document.getElementById("evTitle").value.trim();
   const course = document.getElementById("evCourse").value; // may be "none"
-  const type = "event";
+  const type = document.getElementById("evType").value;
   const detail = document.getElementById("evDetail").value.trim();
   const startTime = document.getElementById("evStart").value || null;
-  const endTime = document.getElementById("evEnd").value || null;
+  // Assignment due-dates are a single point in time, not a range — the end
+  // time field is hidden for this type (see toggleEvTimeFields), so ignore
+  // any stale value rather than trusting it.
+  const endTime = type === "due" ? null : (document.getElementById("evEnd").value || null);
   const isRecurring = document.getElementById("evRecurring").checked;
   const recurFreq = document.getElementById("evRecurFreq").value;
   const recurEnd = document.getElementById("evRecurEnd").value;
@@ -3148,6 +3193,8 @@ document.getElementById("eventForm").addEventListener("submit", (e) => {
   document.getElementById("evDetail").value = "";
   document.getElementById("evStart").value = "";
   document.getElementById("evEnd").value = "";
+  document.getElementById("evType").value = "event";
+  toggleEvTimeFields();
   document.getElementById("evRecurring").checked = false;
   document.getElementById("recurringOptions").style.display = "none";
   document.getElementById("evRecurEnd").value = "";
