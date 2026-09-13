@@ -704,7 +704,15 @@
   .dayEvList {
     padding: 16px 20px 6px;
     border-top: 1px solid var(--border);
+    flex-shrink: 0;
+    max-height: 260px;
+    overflow-y: auto;
+    scrollbar-width: thin;
+    scrollbar-color: var(--border-strong) transparent;
   }
+  .dayEvList::-webkit-scrollbar { width: 8px; }
+  .dayEvList::-webkit-scrollbar-track { background: transparent; }
+  .dayEvList::-webkit-scrollbar-thumb { background: var(--border-strong); border-radius: 4px; }
   /* Per-day group headings in the week view's below-grid event list */
   .weekListHeading {
     font-size: 0.72rem; font-weight: 700; color: var(--ink-faint);
