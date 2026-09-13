@@ -2561,7 +2561,10 @@ async function loadOfficeHours(){
 function saveOfficeHours(){ scheduleSave("office-hours", () => officeHours, 300); }
 
 const OH_DAYS = ["Mon","Tue","Wed","Thu","Fri"];
-const OH_HOURS = [8,9,10,11,12,13,14,15,16,17,18]; // 8 AM–6 PM
+// 7 AM through 11 PM — the grid's own end-of-range math (each mark's slot
+// runs to the START of the next hour) makes the last mark, 23, extend the
+// visible range all the way to exactly midnight.
+const OH_HOURS = [7,8,9,10,11,12,13,14,15,16,17,18,19,20,21,22,23]; // 7 AM–12 AM
 
 function renderOfficeSection(){
   const content = document.getElementById("officeContent");
